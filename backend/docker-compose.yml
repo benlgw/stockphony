@@ -11,7 +11,7 @@ services:
     ports:
       # host:container. If 5432 is already taken on someone's machine, change
       # the left number only, e.g. "5433:5432".
-      - '5432:5432'
+      - "${DB_PORT:-5432}:5432"
     volumes:
       # Everything in this folder runs once, in filename order, the first time
       # the database is created. Delete the volume to re-run it (see README).
@@ -19,7 +19,7 @@ services:
       - stock-data:/var/lib/postgresql/data
     healthcheck:
       # The backend can wait for this instead of crashing on an early connect.
-      test: ['CMD-SHELL', 'pg_isready -U composer -d stocks']
+      test: ["CMD-SHELL", "pg_isready -U composer -d stocks"]
       interval: 5s
       timeout: 3s
       retries: 10
