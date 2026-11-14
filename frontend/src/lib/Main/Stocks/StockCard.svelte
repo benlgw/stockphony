@@ -1,8 +1,9 @@
 <script lang="ts">
     /**
-     * One stock in the mix: instrument and key on the left, chart and volume
-     * filling the rest of the row.
+     * One stock in the mix: instrument and key on the left; chart, tempo and
+     * volume filling the rest of the row.
      */
+    import { MAX_BPM, MIN_BPM } from "$lib/core/config";
     import { KEYS } from "$lib/core/sections";
     import type { SectionDef } from "$lib/core/sections";
     import { studio } from "$lib/state/studio.svelte";
@@ -32,6 +33,7 @@
     const instrumentId = $derived(`instrument-${track.ticker}`);
     const keyId = $derived(`key-${track.ticker}`);
     const volumeId = $derived(`volume-${track.ticker}`);
+    const bpmId = $derived(`bpm-${track.ticker}`);
 </script>
 
 <article class="card">
@@ -100,7 +102,36 @@
 
         <PriceChart {points} {playhead} />
 
-        <div class="volume">
+        <!--
+          Both sliders share one grid, so their tracks line up even though
+          "BPM" and "Volume" are different widths.
+        -->
+        <div class="sliders">
+            <!--
+              oninput moves the number while dragging but tells only the screen
+              (sync: false); onchange fires once on release and tells the backend.
+              Volume does not need this split: it never leaves the browser.
+            -->
+            <label for={bpmId}>BPM</label>
+            <input
+                id={bpmId}
+                type="range"
+                min={MIN_BPM}
+                max={MAX_BPM}
+                value={track.bpm}
+                oninput={(event) =>
+                    studio.updateTrack(
+                        track.ticker,
+                        { bpm: Number(event.currentTarget.value) },
+                        { sync: false },
+                    )}
+                onchange={(event) =>
+                    studio.updateTrack(track.ticker, {
+                        bpm: Number(event.currentTarget.value),
+                    })}
+            />
+            <span class="value">{track.bpm}</span>
+
             <label for={volumeId}>Volume</label>
             <input
                 id={volumeId}
@@ -113,7 +144,7 @@
                         volume: Number(event.currentTarget.value),
                     })}
             />
-            <span class="volume-value">{track.volume}</span>
+            <span class="value">{track.volume}</span>
         </div>
     </div>
 </article>
@@ -247,26 +278,23 @@
         stroke-linecap: round;
     }
 
-    .volume {
-        display: flex;
+    /* Three columns: label, slider, value. "auto" sizes the label column to the
+       wider of the two labels, so both slider tracks start at the same x. */
+    .sliders {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) 32px;
         align-items: center;
-        gap: 0.75rem;
+        column-gap: 0.75rem;
+        row-gap: 0.5rem;
     }
 
-    .volume label {
-        flex-shrink: 0;
+    .sliders input {
+        width: 100%;
     }
 
-    .volume input {
-        flex: 1 1 auto;
-        min-width: 0;
-    }
-
-    .volume-value {
+    .value {
         font-family: var(--font-mono);
         font-size: 0.8125rem;
-        width: 28px;
         text-align: right;
-        flex-shrink: 0;
     }
 </style>

@@ -28,6 +28,11 @@ export type Track = {
   key: KeyId;
   /** 0-100. Stays on the client: it is just an audio gain, the backend does not need it. */
   volume: number;
+  /**
+   * This stock's own tempo. Each track runs on its own clock, so the backend
+   * needs it to schedule that track's notes.
+   */
+  bpm: number;
 };
 
 /* ------------------------------------------------------------------ *
@@ -36,7 +41,7 @@ export type Track = {
 
 export type ServerMessage =
   /** Sent once on connect so the UI can show the backend's real transport state. */
-  | { type: 'ready'; bpm: number; playing: boolean }
+  | { type: 'ready'; playing: boolean }
   /** Full price history for a ticker, sent after the frontend adds it. Drives the chart. */
   | { type: 'history'; ticker: string; points: Point[] }
   /**
@@ -62,7 +67,7 @@ export type ServerMessage =
       inMs?: number;
     }
   /** Transport changed (possibly by another client, or by the backend itself). */
-  | { type: 'transport'; playing: boolean; bpm: number }
+  | { type: 'transport'; playing: boolean }
   /** Something went wrong with a request. Shown in the UI, not thrown away. */
   | { type: 'error'; message: string };
 
@@ -78,12 +83,15 @@ export type ClientMessage =
       section: SectionId;
       instrument: string;
       key: KeyId;
+      bpm: number;
     }
   /** Remove it again: stop sending notes for this ticker. */
   | { type: 'removeTrack'; ticker: string }
-  /** Instrument or key changed. Key affects which notes the backend picks. */
-  | { type: 'updateTrack'; ticker: string; instrument?: string; key?: KeyId }
+  /**
+   * Instrument, key or tempo changed. Only the fields that changed are sent.
+   * Key affects which notes the backend picks; bpm how often it sends them.
+   */
+  | { type: 'updateTrack'; ticker: string; instrument?: string; key?: KeyId; bpm?: number }
   | { type: 'setTransport'; playing: boolean }
   /** Send every loop back to its first step. */
-  | { type: 'restart' }
-  | { type: 'setTempo'; bpm: number };
+  | { type: 'restart' };

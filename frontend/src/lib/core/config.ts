@@ -21,3 +21,8 @@ export const MAX_RECONNECT_MS = 15_000;
 
 /** Charts are downsampled to this many points before drawing. See PriceChart. */
 export const MAX_CHART_POINTS = 400;
+
+/** Each stock has its own tempo. New stocks start at DEFAULT_BPM. */
+export const DEFAULT_BPM = 120;
+export const MIN_BPM = 60;
+export const MAX_BPM = 200;

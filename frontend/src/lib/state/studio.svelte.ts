@@ -11,10 +11,10 @@
  */
 
 import { audio } from "$lib/services/audio";
-import { MAX_RECONNECT_MS, USE_MOCK, WS_URL } from "$lib/core/config";
+import { DEFAULT_BPM, MAX_RECONNECT_MS, USE_MOCK, WS_URL } from "$lib/core/config";
 import { mockHistory } from "$lib/services/mock";
 import { sectionById } from "$lib/core/sections";
-import type { ClientMessage, KeyId, Point, SectionId, ServerMessage, StockInfo, Track } from "$lib/core/types";
+import type { ClientMessage, Point, SectionId, ServerMessage, StockInfo, Track } from "$lib/core/types";
 
 export type ConnectionState = 'connecting' | 'open' | 'closed' | 'mock';
 
@@ -23,7 +23,6 @@ class Studio {
 
   connection = $state<ConnectionState>(USE_MOCK ? 'mock' : 'connecting');
   playing = $state(false);
-  bpm = $state(120);
   tracks = $state<Track[]>([]);
   /** Last error from the backend, shown in the panel rather than swallowed. */
   lastError = $state<string | null>(null);
@@ -61,15 +60,7 @@ class Studio {
       this.#retries = 0;
       // Re-register every track. A reconnect leaves the backend with no idea
       // what this client had in its mix, so without this the music never restarts.
-      for (const track of this.tracks) {
-        this.#send({
-          type: 'addTrack',
-          ticker: track.ticker,
-          section: track.section,
-          instrument: track.instrument,
-          key: track.key,
-        });
-      }
+      for (const track of this.tracks) this.#send(this.#addMessage(track));
     };
 
     socket.onmessage = (event: MessageEvent<string>) => {
@@ -103,6 +94,22 @@ class Studio {
     }
   }
 
+  /**
+   * The addTrack message for a track. Built in one place because two code
+   * paths send it (adding a stock, and re-registering after a reconnect), and
+   * a field added to one but not the other would only break after a reconnect.
+   */
+  #addMessage(track: Track): ClientMessage {
+    return {
+      type: 'addTrack',
+      ticker: track.ticker,
+      section: track.section,
+      instrument: track.instrument,
+      key: track.key,
+      bpm: track.bpm,
+    };
+  }
+
   #send(message: ClientMessage): void {
     if (this.#socket?.readyState === WebSocket.OPEN) {
       this.#socket.send(JSON.stringify(message));
@@ -116,7 +123,6 @@ class Studio {
       case 'ready':
       case 'transport':
         this.playing = message.playing;
-        this.bpm = message.bpm;
         break;
 
       case 'history':
@@ -186,11 +192,6 @@ class Studio {
     this.#send({ type: 'restart' });
   }
 
-  setTempo(bpm: number): void {
-    this.bpm = bpm;
-    this.#send({ type: 'setTempo', bpm });
-  }
-
   /* ---------------- the mix ---------------- */
 
   hasTrack(ticker: string): boolean {
@@ -213,17 +214,12 @@ class Studio {
       instrument: def.instruments[0],
       key: 'amin',
       volume: 75,
+      bpm: DEFAULT_BPM,
     };
 
     this.tracks = [...this.tracks, track];
     audio.setTrackVolume(track.ticker, track.volume);
-    this.#send({
-      type: 'addTrack',
-      ticker: track.ticker,
-      section,
-      instrument: track.instrument,
-      key: track.key,
-    });
+    this.#send(this.#addMessage(track));
 
     if (USE_MOCK) {
       this.history = { ...this.history, [track.ticker]: mockHistory(track.ticker) };
@@ -242,18 +238,27 @@ class Studio {
     this.playheads = restHeads;
   }
 
-  /** Patches one track. Volume is client-side; instrument and key go to the backend. */
-  updateTrack(ticker: string, patch: Partial<Pick<Track, 'instrument' | 'key' | 'volume'>>): void {
+  /**
+   * Patches one track. Volume is client-side only; instrument, key and bpm
+   * are also sent to the backend, which uses them to pick and time notes.
+   *
+   * `sync: false` updates the screen without telling the backend. A slider
+   * fires an input event for every pixel it moves, so the BPM slider uses
+   * this while dragging and only syncs once on release, rather than sending
+   * the backend dozens of tempo changes per second.
+   */
+  updateTrack(
+    ticker: string,
+    patch: Partial<Pick<Track, 'instrument' | 'key' | 'volume' | 'bpm'>>,
+    { sync = true }: { sync?: boolean } = {},
+  ): void {
     this.tracks = this.tracks.map((t) => (t.ticker === ticker ? { ...t, ...patch } : t));
 
     if (patch.volume !== undefined) audio.setTrackVolume(ticker, patch.volume);
-    if (patch.instrument !== undefined || patch.key !== undefined) {
-      this.#send({
-        type: 'updateTrack',
-        ticker,
-        instrument: patch.instrument,
-        key: patch.key as KeyId | undefined,
-      });
+
+    const { instrument, key, bpm } = patch;
+    if (sync && (instrument !== undefined || key !== undefined || bpm !== undefined)) {
+      this.#send({ type: 'updateTrack', ticker, instrument, key, bpm });
     }
   }
 }

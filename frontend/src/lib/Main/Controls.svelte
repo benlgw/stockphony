@@ -1,7 +1,6 @@
 <script lang="ts">
     import ConnectionStatus from "./Controls/ConnectionStatus.svelte";
     import StockSearch from "./Controls/StockSearch.svelte";
-    import Tempo from "./Controls/Tempo.svelte";
     import Transport from "./Controls/Transport.svelte";
 </script>
 
@@ -11,7 +10,6 @@
 -->
 <aside class="panel" aria-label="Playback and search">
     <Transport />
-    <Tempo />
     <StockSearch />
     <ConnectionStatus />
 </aside>
