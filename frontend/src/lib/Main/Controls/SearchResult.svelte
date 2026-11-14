@@ -1,23 +1,14 @@
 <script lang="ts">
-    /** One row of the search results: draggable, with a keyboard fallback. */
-    import { SECTIONS } from "$lib/core/sections";
-    import { studio } from "$lib/state/studio.svelte";
-    import type { SectionId, StockInfo } from "$lib/core/types";
+    /** One row of the search results. Drag it into a section to add the stock. */
+    import type { StockInfo } from "$lib/core/types";
 
     let { stock }: { stock: StockInfo } = $props();
-
-    let menuOpen = $state(false);
 
     function handleDragStart(event: DragEvent) {
         // SectionLane reads this back out in its drop handler. JSON rather than
         // just the ticker, so the lane does not have to look the stock up again.
         event.dataTransfer?.setData("application/json", JSON.stringify(stock));
         if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
-    }
-
-    function addTo(section: SectionId) {
-        studio.addTrack(stock, section);
-        menuOpen = false;
     }
 </script>
 
@@ -36,33 +27,10 @@
     {#if stock.delisted}
         <span class="badge">Delisted</span>
     {/if}
-
-    <!-- Drag and drop cannot be done from a keyboard, so this menu is the
-         accessible way to add a stock to a section. -->
-    <button
-        class="menu-toggle"
-        aria-expanded={menuOpen}
-        aria-label="Add {stock.ticker} to a section"
-        onclick={() => (menuOpen = !menuOpen)}
-    >
-        +
-    </button>
-
-    {#if menuOpen}
-        <ul class="menu">
-            {#each SECTIONS as section (section.id)}
-                <li>
-                    <button onclick={() => addTo(section.id)}>{section.name}</button>
-                </li>
-            {/each}
-        </ul>
-    {/if}
 </li>
 
 <style>
     li {
-        /* Anchors the absolutely positioned menu below. */
-        position: relative;
         display: flex;
         align-items: center;
         gap: 0.625rem;
@@ -111,56 +79,5 @@
         font-size: 0.625rem;
         font-weight: 700;
         letter-spacing: 0.4px;
-    }
-
-    .menu-toggle {
-        width: 28px;
-        height: 28px;
-        flex-shrink: 0;
-        border: 1px solid var(--border-strong);
-        border-radius: 8px;
-        background: transparent;
-        color: var(--muted);
-        font-size: 1rem;
-        line-height: 1;
-    }
-
-    .menu {
-        position: absolute;
-        right: 0.5rem;
-        top: calc(100% - 4px);
-        z-index: 2;
-        list-style: none;
-        padding: 0.25rem;
-        background: var(--panel);
-        border: 1px solid var(--border-strong);
-        border-radius: 10px;
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-    }
-
-    .menu li {
-        min-height: auto;
-        padding: 0;
-        background: none;
-        border: 0;
-        cursor: default;
-    }
-
-    .menu button {
-        width: 100%;
-        min-height: 36px;
-        padding: 0 0.875rem;
-        border: 0;
-        border-radius: 7px;
-        background: transparent;
-        color: var(--text);
-        font-size: 0.875rem;
-        text-align: left;
-    }
-
-    .menu button:hover {
-        background: var(--card);
     }
 </style>

@@ -37,7 +37,7 @@
 <!--
   svelte-ignore a11y_no_static_element_interactions
   A lane is a drop zone, not a control, so it takes no focus and has no key
-  handler. Keyboard users add stocks with the + menu on each search result.
+handler. Keyboard users add stocks with the + menu on each search result.
 -->
 <section
     class="lane lane--{section.id}"
