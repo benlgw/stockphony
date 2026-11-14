@@ -1,0 +1,272 @@
+<script lang="ts">
+    /**
+     * One stock in the mix: instrument and key on the left, chart and volume
+     * filling the rest of the row.
+     */
+    import { KEYS } from "$lib/core/sections";
+    import type { SectionDef } from "$lib/core/sections";
+    import { studio } from "$lib/state/studio.svelte";
+    import type { KeyId, Track } from "$lib/core/types";
+    import PriceChart from "./PriceChart.svelte";
+
+    let { track, section }: { track: Track; section: SectionDef } = $props();
+
+    // Reading from the studio's raw-state records keeps these current as
+    // history and note messages arrive.
+    const points = $derived(studio.history[track.ticker] ?? []);
+    const playhead = $derived(studio.playheads[track.ticker] ?? 0);
+
+    /** The date under the playhead, shown above the chart. */
+    const currentDate = $derived.by(() => {
+        const point = points[Math.min(playhead, points.length - 1)];
+        if (!point) return "Loading history…";
+        return new Date(point.date).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+        });
+    });
+
+    // $derived, not plain consts: Svelte reuses this component when the list
+    // changes, and a const would keep the ticker it was first created with.
+    const instrumentId = $derived(`instrument-${track.ticker}`);
+    const keyId = $derived(`key-${track.ticker}`);
+    const volumeId = $derived(`volume-${track.ticker}`);
+</script>
+
+<article class="card">
+    <div class="settings">
+        <div class="identity">
+            <h3>{track.ticker}</h3>
+            <div class="name-row">
+                <span class="company">{track.name}</span>
+                {#if track.delisted}
+                    <span class="badge">Delisted</span>
+                {/if}
+            </div>
+        </div>
+
+        <div class="field">
+            <label for={instrumentId}>Instrument</label>
+            <select
+                id={instrumentId}
+                value={track.instrument}
+                onchange={(event) =>
+                    studio.updateTrack(track.ticker, {
+                        instrument: event.currentTarget.value,
+                    })}
+            >
+                {#each section.instruments as instrument (instrument)}
+                    <option value={instrument}>{instrument}</option>
+                {/each}
+            </select>
+        </div>
+
+        <div class="field">
+            <label for={keyId}>Key</label>
+            <select
+                id={keyId}
+                value={track.key}
+                disabled={!section.pitched}
+                onchange={(event) =>
+                    studio.updateTrack(track.ticker, {
+                        key: event.currentTarget.value as KeyId,
+                    })}
+            >
+                {#each KEYS as key (key.id)}
+                    <option value={key.id}>{key.label}</option>
+                {/each}
+            </select>
+            {#if !section.pitched}
+                <!-- Drums have no pitch, so the picker above is disabled. -->
+                <span class="hint">Unpitched</span>
+            {/if}
+        </div>
+    </div>
+
+    <div class="playback">
+        <div class="playback-head">
+            <span class="date">{currentDate}</span>
+            <button
+                class="remove"
+                onclick={() => studio.removeTrack(track.ticker)}
+                aria-label="Remove {track.ticker} from the mix"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+            </button>
+        </div>
+
+        <PriceChart {points} {playhead} />
+
+        <div class="volume">
+            <label for={volumeId}>Volume</label>
+            <input
+                id={volumeId}
+                type="range"
+                min="0"
+                max="100"
+                value={track.volume}
+                oninput={(event) =>
+                    studio.updateTrack(track.ticker, {
+                        volume: Number(event.currentTarget.value),
+                    })}
+            />
+            <span class="volume-value">{track.volume}</span>
+        </div>
+    </div>
+</article>
+
+<style>
+    .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 1rem;
+        display: flex;
+        gap: 1.125rem;
+        align-items: stretch;
+    }
+
+    .settings {
+        /* Fixed width so every card's controls line up down the lane. */
+        flex: 0 0 180px;
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+    }
+
+    h3 {
+        font-family: var(--font-mono);
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+
+    .name-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+        margin-top: 0.25rem;
+    }
+
+    .company {
+        font-size: 0.875rem;
+        color: var(--text-soft);
+    }
+
+    .badge {
+        background: var(--danger);
+        color: var(--on-danger);
+        border-radius: 6px;
+        padding: 3px 7px;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+    }
+
+    .field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    label {
+        font-size: 0.75rem;
+        color: var(--muted);
+    }
+
+    select {
+        min-height: 44px;
+        width: 100%;
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
+        border-radius: 10px;
+        padding: 0 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    select:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+
+    .hint {
+        font-size: 0.75rem;
+        color: var(--muted);
+    }
+
+    /* min-width: 0 lets the chart shrink; without it a flex child refuses to
+       go below its content width and the card overflows. */
+    .playback {
+        flex: 1 1 0;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+    }
+
+    .playback-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .date {
+        font-family: var(--font-mono);
+        font-size: 0.8125rem;
+        color: var(--muted);
+    }
+
+    .remove {
+        width: 44px;
+        height: 44px;
+        flex-shrink: 0;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: transparent;
+        color: var(--muted);
+        display: grid;
+        place-items: center;
+    }
+
+    .remove:hover {
+        color: var(--danger);
+        border-color: var(--danger);
+    }
+
+    .remove svg {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+    }
+
+    .volume {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .volume label {
+        flex-shrink: 0;
+    }
+
+    .volume input {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .volume-value {
+        font-family: var(--font-mono);
+        font-size: 0.8125rem;
+        width: 28px;
+        text-align: right;
+        flex-shrink: 0;
+    }
+</style>
