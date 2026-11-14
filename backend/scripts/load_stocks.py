@@ -36,8 +36,15 @@ import urllib.error
 import urllib.request
 from collections import Counter
 from collections.abc import Iterator
+from pathlib import Path
 
 import psycopg
+from dotenv import load_dotenv
+
+# Read settings from backend/.env. The path is built from this file's location,
+# so it works whichever folder you run the script from. Variables already set
+# in the terminal win over the file, so a one-off override still works.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 SEC_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 
