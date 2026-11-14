@@ -1,0 +1,28 @@
+# The backend's dependency list: the one file both uv and pip setups come from.
+#
+# Adding a dependency:
+#   uv users:  uv add <package>      (updates this file and uv.lock for you)
+#   pip users: add it to `dependencies` below, then ask a uv user to run
+#              `uv lock && uv export --no-hashes --no-emit-project -o requirements.txt`
+#              (or `pip install uv` and run it yourself)
+#
+# Commit pyproject.toml, uv.lock and requirements.txt together, so everyone
+# installs exactly the same versions on every OS.
+
+[project]
+name = "stockphony-backend"
+version = "0.1.0"
+description = "Stockphony backend: stock search, price history and note scheduling"
+requires-python = ">=3.11"
+dependencies = [
+    # Postgres driver. The [binary] extra ships prebuilt wheels for Windows,
+    # macOS and Linux, so nobody needs a C compiler or local Postgres libraries.
+    "psycopg[binary]>=3.2",
+    # Reads backend/.env into environment variables.
+    "python-dotenv>=1.0",
+]
+
+[tool.uv]
+# This is an application, not a library to publish, so uv should install its
+# dependencies without trying to build and install the project itself.
+package = false
