@@ -1,0 +1,102 @@
+/*
+ * Design tokens: every colour, font and radius the app uses.
+ *
+ * This is a plain stylesheet rather than a <style> block because it is global.
+ * Svelte scopes component styles to that component, so shared variables either
+ * live in a file like this one or get wrapped in :global(), which is noisier.
+ *
+ * Dark is the default. The media query swaps in a light palette when the
+ * browser asks for one, and because components only ever refer to the variable
+ * names, nothing else in the app needs to know which mode is active.
+ */
+
+:root {
+    /* Surfaces, from furthest back to nearest front. */
+    --bg: #0e0f13;
+    --panel: #171922;
+    --lane: #13151c;
+    --card: #1a1d26;
+
+    --border: #2a2d3a;
+    --border-strong: #3a3e4e;
+
+    --text: #f2f2ee;
+    --text-soft: #d7d8df;
+    --muted: #a3a6b4;
+
+    --accent: #b8f55a;
+    --on-accent: #0e0f13;
+    --danger: #ff8a65;
+    --on-danger: #0e0f13;
+
+    /* The unplayed part of a price line. */
+    --chart-base: #3a3e4e;
+
+    /* One per section. Components reach these through .lane--* classes
+       rather than naming them directly, so a card does not need to know
+       which section it is in. */
+    --melody: #b8f55a;
+    --bass: #7cc4ff;
+    --drums: #ffc857;
+    --pads: #c9a7ff;
+    --vocals: #ff8a65;
+
+    --font-sans: "Space Grotesk", Inter, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+    /* Tells the browser to render native controls (scrollbars, selects) dark. */
+    color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+    :root {
+        --bg: #f4f4ef;
+        --panel: #ffffff;
+        --lane: #ffffff;
+        --card: #f7f7f2;
+
+        --border: #dedcd3;
+        --border-strong: #c3c1b6;
+
+        --text: #16171c;
+        --text-soft: #3a3c44;
+        --muted: #6b6e78;
+
+        --accent: #4a7312;
+        --on-accent: #ffffff;
+        --danger: #b23c20;
+        --on-danger: #ffffff;
+
+        --chart-base: #c9c7bd;
+
+        /* Darkened versions: the neon set is unreadable on a pale background. */
+        --melody: #4a7312;
+        --bass: #175f9e;
+        --drums: #8a5a00;
+        --pads: #5b3da6;
+        --vocals: #b23c20;
+
+        color-scheme: light;
+    }
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+}
+
+button {
+    cursor: pointer;
+}
+
+input[type="range"] {
+    accent-color: var(--accent);
+}
+
+/* The default focus ring disappears against a dark background, and keyboard
+   users need to see where they are. */
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
