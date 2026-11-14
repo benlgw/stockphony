@@ -1,0 +1,28 @@
+# Postgres for stock search, so everyone on the team gets the same database
+# whatever OS they are on. Start it with: docker compose up -d
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: stock-db
+    environment:
+      POSTGRES_USER: composer
+      POSTGRES_PASSWORD: composer
+      POSTGRES_DB: stocks
+    ports:
+      # host:container. If 5432 is already taken on someone's machine, change
+      # the left number only, e.g. "5433:5432".
+      - '5432:5432'
+    volumes:
+      # Everything in this folder runs once, in filename order, the first time
+      # the database is created. Delete the volume to re-run it (see README).
+      - ./db:/docker-entrypoint-initdb.d:ro
+      - stock-data:/var/lib/postgresql/data
+    healthcheck:
+      # The backend can wait for this instead of crashing on an early connect.
+      test: ['CMD-SHELL', 'pg_isready -U composer -d stocks']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  stock-data:
