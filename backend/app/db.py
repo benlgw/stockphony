@@ -8,9 +8,12 @@ file simple for a hackathon.
 
 from __future__ import annotations
 
+import logging
+import time
 from datetime import date, datetime
 
 import psycopg
+from psycopg.conninfo import conninfo_to_dict
 from psycopg.rows import dict_row
 
 from . import settings
@@ -41,9 +44,49 @@ def connect() -> psycopg.Connection:
     return psycopg.connect(settings.DATABASE_URL, row_factory=dict_row)
 
 
-def ensure_schema() -> None:
-    with connect() as conn:
-        conn.execute(SCHEMA)
+log = logging.getLogger("stockphony.db")
+
+
+def ensure_schema(wait_seconds: float = 10) -> None:
+    """
+    Creates the price cache tables, waiting briefly for the database first.
+
+    The wait covers starting the database and the server at the same moment:
+    Postgres takes a few seconds to accept connections. If it still isn't
+    reachable after that, this fails with one plain sentence saying what to
+    do, instead of a 20-line traceback.
+    """
+    deadline = time.monotonic() + wait_seconds
+    warned = False
+    while True:
+        try:
+            with connect() as conn:
+                conn.execute(SCHEMA)
+            return
+        except psycopg.OperationalError:
+            if time.monotonic() >= deadline:
+                break
+            if not warned:
+                log.warning("Waiting for the database at %s...", _where())
+                warned = True
+            time.sleep(1)
+
+    # `from None` hides psycopg's own traceback, so this message is the last
+    # thing printed before uvicorn's "Application startup failed".
+    raise RuntimeError(
+        f"Can't reach the database at {_where()}. Is it running? "
+        "Start it from backend/ with: docker compose up -d"
+    ) from None
+
+
+def _where() -> str:
+    """host:port/database from DATABASE_URL, leaving out the password."""
+    try:
+        parts = conninfo_to_dict(settings.DATABASE_URL)
+        return f"{parts.get('host', 'localhost')}:{parts.get('port', '5432')}/{parts.get('dbname', '')}"
+    except Exception:
+        return "DATABASE_URL"
+
 
 
 def _load_search_query() -> str:

@@ -5,11 +5,27 @@ caches it in Postgres, and works out when each stock's notes should play.
 
 ## Running it
 
-From `backend/`, with Docker running:
+From `backend/`, with Docker running, in this order:
 
 ```bash
-docker compose up -d                             # Postgres
-uv run uvicorn app.main:app --reload --port 8000 # the API
+docker compose up -d                              # 1. the database, first
+uv run uvicorn app.main:app --reload --port 8000  # 2. then the API
+```
+
+**The database must be running before the API starts.** The API waits up to
+10 seconds for it, then stops with:
+
+```
+RuntimeError: Can't reach the database at localhost:5432/stocks. Is it running?
+```
+
+If you see that, run `docker compose up -d` and start the API again. To check
+the database is up, run `docker compose ps`: it should say `healthy`.
+
+The first time, also load the full list of stocks (it only needs doing once):
+
+```bash
+uv run python scripts/load_stocks.py
 ```
 
 Then open **http://localhost:8000/docs**: every endpoint, with a "Try it out"
