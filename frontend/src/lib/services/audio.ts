@@ -103,19 +103,6 @@ function drumKit(kick: Tone.MembraneSynth, hat: Tone.MetalSynth | Tone.NoiseSynt
   };
 }
 
-/** A noise instrument: ignores pitch entirely (the crowd doesn't sing in key). */
-function noise(synth: Tone.NoiseSynth): Voice {
-  return {
-    output: synth,
-    trigger(note, at) {
-      synth.triggerAttackRelease(note.durationMs / 1000, at, note.velocity);
-    },
-    dispose() {
-      synth.dispose();
-    },
-  };
-}
-
 /* ------------------------------------------------------------------ *
  * Recorded instruments
  *
@@ -327,18 +314,6 @@ const INSTRUMENTS: Record<string, () => Voice> = {
       harmonicity: 3,
       envelope: { attack: 0.01, decay: 0.5, sustain: 0.2, release: 0.8 },
       volume: 17,
-    })),
-  "Robot voice": () =>
-    pitched(new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: "fmsquare", modulationType: "sine", harmonicity: 0.5, modulationIndex: 3 },
-      envelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.2 },
-      volume: -3,
-    })),
-  "Crowd cheer": () =>
-    noise(new Tone.NoiseSynth({
-      noise: { type: "pink" },
-      envelope: { attack: 0.3, decay: 0.4, sustain: 0.6, release: 1.2 },
-      volume: 9,
     })),
 };
 

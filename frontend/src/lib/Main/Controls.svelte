@@ -25,6 +25,6 @@
         gap: 1.125rem;
         /* Stays beside the lanes as they scroll past. */
         position: sticky;
-        top: 1.5rem;
+        top: var(--scroll-gap);
     }
 </style>

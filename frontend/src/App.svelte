@@ -29,4 +29,18 @@
         margin: 0 auto;
         padding: 0 2rem 3rem;
     }
+
+    /* A strip in the page colour, pinned to the top of the window. The stock
+       cards scroll underneath it, so they disappear the same distance from
+       the top as the control panel stops at, instead of at the very edge.
+       pointer-events: none so it never blocks a click on anything below. */
+    :global(body)::before {
+        content: "";
+        position: fixed;
+        inset: 0 0 auto;
+        height: var(--scroll-gap);
+        background: var(--bg);
+        z-index: 10;
+        pointer-events: none;
+    }
 </style>

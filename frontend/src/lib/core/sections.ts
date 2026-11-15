@@ -63,7 +63,7 @@ export const SECTIONS: SectionDef[] = [
     id: 'volatility',
     name: 'Volatility',
     pitched: true,
-    instruments: ['Trumpet', 'Saxophone', 'Vocal chops', 'Choir hits', 'Robot voice', 'Crowd cheer'],
+    instruments: ['Trumpet', 'Saxophone', 'Vocal chops', 'Choir hits'],
   },
 ];
 

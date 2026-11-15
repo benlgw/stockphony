@@ -43,6 +43,11 @@
     --chords: #c9a7ff;
     --volatility: #ff8a65;
 
+    /* The gap between the top of the window and the content while scrolling.
+       Shared by the sticky control panel and the band in App.svelte that
+       the stock cards scroll under, so the two always line up. */
+    --scroll-gap: 1.5rem;
+
     --font-sans: "Space Grotesk", Inter, system-ui, sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
