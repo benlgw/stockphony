@@ -14,7 +14,7 @@
  * The functions here (start, time, running, play, setTrackVolume, removeTrack,
  * suspend) are the same as before, so nothing else in the app had to change.
  *
- * Signal path:  instrument -> track volume -> master -> soft clipper -> speakers
+ * Signal path:  instrument -> track volume -> master -> reverb -> soft clipper -> speakers
  */
 
 import * as Tone from "tone";
@@ -45,7 +45,7 @@ function ensureContext(): void {
   // is shorter than our scheduler's 0.15s, so Tone's chord instruments held
   // back the furthest notes on a timer of their own, and when you paused,
   // those fired into the paused context with a console warning each.
-  Tone.setContext(new Tone.Context({ latencyHint: "playback", lookAhead: 0.5 }));
+  Tone.setContext(new Tone.Context({ latencyHint: "playback", lookAhead: 0.2 }));
   if (tonesDefault.state === "running") void tonesDefault.suspend();
   contextReady = true;
 }
@@ -381,7 +381,7 @@ class AudioEngine {
   #volumes = new Map<string, number>();
 
   /**
-   * Builds the shared chain on first use: master -> soft clipper.
+   * Builds the shared chain on first use: master -> reverb -> soft clipper.
    * Safe before the user has clicked anything: nodes can be created while the
    * audio context is still suspended, they just stay silent.
    */
@@ -389,6 +389,10 @@ class AudioEngine {
     ensureContext();
     if (!this.#master) {
       this.#master = new Tone.Gain(MASTER_GAIN);
+
+      // A little reverb puts every instrument in the same "room", which is a
+      // big part of why a mix sounds finished rather than like test tones.
+      const reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.01, wet: 0.2 });
 
       // Soft clipper: quiet and medium levels pass through almost unchanged,
       // so the volume sliders keep their full effect; only loud peaks are
@@ -399,11 +403,9 @@ class AudioEngine {
       // Topped out at 0.98 rather than 1: oversampling smooths the curve, and
       // that smoothing can overshoot the top by a hair.
       const clipper = new Tone.WaveShaper((x) => 0.98 * Math.tanh(x * CLIP_HEADROOM), 4096);
-      clipper.oversample = "none"; // 4x sounded no different and cost CPU
+      clipper.oversample = "4x";
 
-      // Reverb removed from the chain: it was the heaviest single piece of
-      // audio processing, and laptops struggled with a full mix.
-      this.#master.chain(headroom, clipper, Tone.getDestination());
+      this.#master.chain(reverb, headroom, clipper, Tone.getDestination());
     }
     return this.#master;
   }
