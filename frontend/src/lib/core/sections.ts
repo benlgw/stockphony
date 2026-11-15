@@ -19,13 +19,14 @@ export const SECTIONS: SectionDef[] = [
     id: 'melody',
     name: 'Melody',
     pitched: true,
-    instruments: ['Saw synth', 'Piano', 'Glass bells', 'Pluck', 'Flute'],
+    instruments: ['Saw synth', 'Electric piano', 'Glass bells', 'Pluck', 'Flute',
+                  'Grand piano', 'Acoustic guitar', 'Electric guitar', 'Nylon guitar', 'Xylophone'],
   },
   {
     id: 'bass',
     name: 'Bass',
     pitched: true,
-    instruments: ['Wobble bass', 'Sub bass', 'Slap bass', 'Upright bass'],
+    instruments: ['Wobble bass', 'Sub bass', 'Slap bass', 'Upright bass', 'Electric bass'],
   },
   {
     id: 'drums',
@@ -37,13 +38,13 @@ export const SECTIONS: SectionDef[] = [
     id: 'pads',
     name: 'Pads',
     pitched: true,
-    instruments: ['Warm strings', 'Brass section', 'Choir pad', 'Space pad'],
+    instruments: ['Warm strings', 'Brass section', 'Choir pad', 'Space pad', 'Organ', 'Cello'],
   },
   {
     id: 'vocals',
     name: 'Vocals',
     pitched: true,
-    instruments: ['Vocal chops', 'Choir hits', 'Robot voice', 'Crowd cheer'],
+    instruments: ['Vocal chops', 'Choir hits', 'Robot voice', 'Crowd cheer', 'Saxophone', 'Trumpet'],
   },
 ];
 

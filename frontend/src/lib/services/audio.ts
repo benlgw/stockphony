@@ -116,6 +116,79 @@ function noise(synth: Tone.NoiseSynth): Voice {
   };
 }
 
+/* ------------------------------------------------------------------ *
+ * Recorded instruments
+ *
+ * Real recordings from tonejs-instruments (CC-BY 3.0, credited in
+ * public/samples/CREDITS.md), bundled in public/samples/ so the app works
+ * without internet. Each instrument has recordings of a handful of notes,
+ * about three semitones apart; Tone's Sampler plays any other note by
+ * repitching the nearest recording, which is inaudible over that distance.
+ *
+ * `transpose` shifts what the backend sends into the range the instrument
+ * was recorded in. Guitars play the melody an octave down, which is both
+ * where guitars sound best and where their recordings are.
+ * ------------------------------------------------------------------ */
+
+type Recording = { folder: string; transpose: number; notes: string[] };
+
+const RECORDINGS: Record<string, Recording> = {
+  "Acoustic guitar": { folder: "guitar-acoustic", transpose: -12, notes: ["F2", "G#2", "B2", "D3", "F3", "G#3", "B3", "D4", "F4", "G#4", "B4", "D5"] },
+  "Electric guitar": { folder: "guitar-electric", transpose: -12, notes: ["E2", "A2", "C3", "D#3", "F#3", "A3", "C4", "D#4", "F#4", "A4", "C5", "D#5", "F#5", "A5"] },
+  "Nylon guitar": { folder: "guitar-nylon", transpose: -12, notes: ["E2", "G#2", "B2", "D3", "F#3", "A3", "C#4", "E4", "G#4", "B4", "D5", "F#5", "G#5"] },
+  "Grand piano": { folder: "piano", transpose: 0, notes: ["F3", "G#3", "B3", "D4", "F4", "G#4", "B4", "D5", "F5", "G#5", "B5", "D6", "F6", "G#6"] },
+  "Xylophone": { folder: "xylophone", transpose: 12, notes: ["G4", "C5", "G5", "C6", "G6", "C7", "G7", "C8"] },
+  "Electric bass": { folder: "bass-electric", transpose: 0, notes: ["E1", "G1", "A#1", "C#2", "E2", "G2", "A#2", "C#3", "E3", "G3", "A#3"] },
+  "Organ": { folder: "organ", transpose: 0, notes: ["D#2", "F#2", "A2", "C3", "D#3", "F#3", "A3", "C4", "D#4", "F#4", "A4", "C5", "D#5"] },
+  "Cello": { folder: "cello", transpose: 0, notes: ["F2", "G#2", "B2", "D3", "F3", "G#3", "B3", "D4", "F4", "G#4", "B4", "C5"] },
+  "Saxophone": { folder: "saxophone", transpose: -12, notes: ["F3", "G#3", "B3", "D4", "F4", "G#4", "B4", "D5", "F5", "G#5"] },
+  "Trumpet": { folder: "trumpet", transpose: 0, notes: ["F4", "A#4", "D5", "F5", "A5", "C6"] },
+};
+
+/**
+ * Per-instrument loudness (dB, measured against the synths in the same
+ * section) and how long notes ring after release (seconds).
+ */
+const RECORDING_SOUND: Record<string, { volume: number; release: number }> = {
+  "Acoustic guitar": { volume: 0, release: 1 },
+  "Electric guitar": { volume: 5, release: 1 },
+  "Nylon guitar": { volume: 0, release: 1 },
+  "Grand piano": { volume: 3, release: 1.2 },
+  Xylophone: { volume: 4, release: 0.6 },
+  "Electric bass": { volume: 4, release: 0.6 },
+  Organ: { volume: -1, release: 0.4 },
+  Cello: { volume: 1, release: 0.8 },
+  Saxophone: { volume: 7, release: 0.4 },
+  Trumpet: { volume: 2, release: 0.4 },
+};
+
+function recorded(name: string): Voice {
+  const { folder, transpose, notes } = RECORDINGS[name];
+  const { volume, release } = RECORDING_SOUND[name];
+  // Files are named like "As3.mp3" for A#3, since # isn't safe in a URL.
+  const urls = Object.fromEntries(notes.map((note) => [note, `${note.replace("#", "s")}.mp3`]));
+  const sampler = new Tone.Sampler({
+    urls,
+    // BASE_URL is "/" in development; using it keeps paths right if the app
+    // is ever served from a subfolder.
+    baseUrl: `${import.meta.env.BASE_URL}samples/${folder}/`,
+    release,
+    volume,
+  });
+  return {
+    output: sampler,
+    trigger(note, at) {
+      // Recordings load in the background the first time an instrument is
+      // used (a fraction of a second, locally). Notes before then are skipped.
+      if (note.pitch === null || !sampler.loaded) return;
+      sampler.triggerAttackRelease(midiToHz(note.pitch + transpose), note.durationMs / 1000, at, note.velocity);
+    },
+    dispose() {
+      sampler.dispose();
+    },
+  };
+}
+
 const INSTRUMENTS: Record<string, () => Voice> = {
   /* ---- Melody ---- */
   "Saw synth": () =>
@@ -124,7 +197,8 @@ const INSTRUMENTS: Record<string, () => Voice> = {
       envelope: { attack: 0.005, decay: 0.15, sustain: 0.3, release: 0.25 },
       volume: 6,
     })),
-  Piano: () =>
+  // FM synthesis: the classic 80s electric piano sound.
+  "Electric piano": () =>
     pitched(new Tone.PolySynth(Tone.FMSynth, {
       harmonicity: 2,
       modulationIndex: 3.5,
@@ -267,7 +341,10 @@ const INSTRUMENTS: Record<string, () => Voice> = {
     })),
 };
 
-const FALLBACK_INSTRUMENT = "Piano";
+// Every recorded instrument is available by name too.
+for (const name of Object.keys(RECORDINGS)) INSTRUMENTS[name] = () => recorded(name);
+
+const FALLBACK_INSTRUMENT = "Electric piano";
 
 /* ------------------------------------------------------------------ *
  * The engine
@@ -282,6 +359,16 @@ type TrackAudio = {
 };
 
 class AudioEngine {
+  /**
+   * Whether the play button is on. Set only by start() and suspend().
+   *
+   * This can't be read from the audio context's own state: browsers decide
+   * that for themselves. Firefox, and Chrome on sites you've played audio on
+   * a lot (like a localhost you test on all day), let a context start running
+   * by itself as soon as you click or drag anything. Trusting the context
+   * meant dragging a stock in started the music while the app said paused.
+   */
+  #enabled = false;
   #master: Tone.Gain | null = null;
   #tracks = new Map<string, TrackAudio>();
   /**
@@ -311,7 +398,9 @@ class AudioEngine {
       // from -1 to 1, so the signal is scaled down going in and the tanh
       // curve scales it back up.
       const headroom = new Tone.Gain(1 / CLIP_HEADROOM);
-      const clipper = new Tone.WaveShaper((x) => Math.tanh(x * CLIP_HEADROOM), 4096);
+      // Topped out at 0.98 rather than 1: oversampling smooths the curve, and
+      // that smoothing can overshoot the top by a hair.
+      const clipper = new Tone.WaveShaper((x) => 0.98 * Math.tanh(x * CLIP_HEADROOM), 4096);
       clipper.oversample = "4x";
 
       this.#master.chain(reverb, headroom, clipper, Tone.getDestination());
@@ -331,6 +420,7 @@ class AudioEngine {
 
   /** Browsers block audio until the user interacts, so this runs from the play button. */
   async start(): Promise<void> {
+    this.#enabled = true;
     await Tone.start();
     this.#masterBus();
   }
@@ -340,11 +430,17 @@ class AudioEngine {
    * pausing freezes it and every loop resumes from exactly where it stopped.
    */
   get time(): number {
-    return Tone.getContext().currentTime;
+    const context = Tone.getContext();
+    // If the browser started the context by itself before play was pressed,
+    // stop it, so the clock (and every loop's position) stays frozen at 0.
+    if (!this.#enabled && context.state === "running") {
+      void (context.rawContext as AudioContext).suspend();
+    }
+    return context.currentTime;
   }
 
   get running(): boolean {
-    return Tone.getContext().state === "running";
+    return this.#enabled && Tone.getContext().state === "running";
   }
 
   /** Volume slider, 0-100. */
@@ -398,6 +494,7 @@ class AudioEngine {
 
   /** Called when transport pauses: silences everything and freezes `time`. */
   async suspend(): Promise<void> {
+    this.#enabled = false;
     const raw = Tone.getContext().rawContext as AudioContext;
     if (raw.state === "running") await raw.suspend();
   }
