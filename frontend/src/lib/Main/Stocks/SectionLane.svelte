@@ -84,8 +84,14 @@ handler. Keyboard users add stocks with the + menu on each search result.
      * That is why StockCard and PriceChart can draw in the right colour without
      * being told which section they are in.
      */
-    .lane--melody {
-        --section-color: var(--melody);
+    .lane--piano {
+        --section-color: var(--piano);
+    }
+    .lane--guitar {
+        --section-color: var(--guitar);
+    }
+    .lane--synth {
+        --section-color: var(--synth);
     }
     .lane--bass {
         --section-color: var(--bass);
@@ -93,11 +99,11 @@ handler. Keyboard users add stocks with the + menu on each search result.
     .lane--drums {
         --section-color: var(--drums);
     }
-    .lane--pads {
-        --section-color: var(--pads);
+    .lane--chords {
+        --section-color: var(--chords);
     }
-    .lane--vocals {
-        --section-color: var(--vocals);
+    .lane--volatility {
+        --section-color: var(--volatility);
     }
 
     .is-over {

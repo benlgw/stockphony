@@ -25,7 +25,24 @@ from typing import Literal
 STEPS_PER_BEAT = 2  # each step is an 8th note
 BAR_STEPS = 16      # loops are padded to a multiple of this (2 bars of 4/4)
 
-SectionId = Literal["melody", "bass", "drums", "pads", "vocals"]
+SectionId = Literal["piano", "guitar", "synth", "bass", "drums", "chords", "volatility"]
+
+# Each section plays in one of these styles. Piano and synth both carry the
+# tune; they're separate sections so instruments are easy to find, not
+# because they play differently.
+STYLE: dict[str, str] = {
+    "piano": "tune",
+    "synth": "tune",
+    "guitar": "picking",
+    "bass": "bass",
+    "drums": "drums",
+    "chords": "chords",
+    "volatility": "volatility",
+}
+
+# The fingerpicking pattern for guitar, as scale degrees above the chord's
+# root: root, third, fifth, octave, then back down. Eight steps = one bar.
+PICKING = [0, 2, 4, 7, 4, 2, 4, 7]
 KeyId = Literal["cmaj", "amin", "ddor", "ephr"]
 
 # (root pitch class, scale intervals in semitones). C=0, D=2, E=4, A=9.
@@ -104,6 +121,7 @@ def build_schedule(prices: list[float], section: SectionId, key: KeyId, bpm: int
     huge = percentile(moves, 0.97) or 1e-9
 
     notes: list[dict] = []
+    style = STYLE[section]
 
     def add(step: int, midi: int | None, velocity: float, length_steps: float) -> None:
         notes.append({
@@ -118,7 +136,7 @@ def build_schedule(prices: list[float], section: SectionId, key: KeyId, bpm: int
         chunk = values[start : start + size]
         return sum(chunk) / len(chunk)
 
-    if section == "melody":
+    if style == "tune":
         # The price line becomes the tune: two octaves, low price = low note.
         # A repeated note on an off-beat is held instead of replayed, which
         # leaves gaps and stops the melody being a wall of 8th notes.
@@ -130,14 +148,25 @@ def build_schedule(prices: list[float], section: SectionId, key: KeyId, bpm: int
             add(i, pitch(key, degree, 4), 0.45 + 0.5 * min(1, moves[i] / big), 0.9)
             previous = degree
 
-    elif section == "bass":
+    elif style == "picking":
+        # Picks through the notes of a chord, one per step, like a fingerpicked
+        # guitar. The chord follows the average price over each bar, so it
+        # moves with the stock without jumping around every week. Notes ring
+        # on into the next, and the beat gets a little extra weight.
+        for i in range(count):
+            bar = i - i % 8
+            root = round(window_average(level, bar, 8) * 7)
+            accent = 0.15 if i % 4 == 0 else 0.0
+            add(i, pitch(key, root + PICKING[i % 8], 3), 0.45 + accent + 0.3 * min(1, moves[i] / big), 1.8)
+
+    elif style == "bass":
         # Every half bar, the root of the average price over the last 8 steps.
         # Averaging smooths week-to-week noise, so the bass moves like a bass.
         for i in range(0, count, 4):
             avg = window_average(level, max(0, i - 7), 8)
             add(i, pitch(key, round(avg * 7), 2), 0.75, 3.6)
 
-    elif section == "drums":
+    elif style == "drums":
         # A steady kick on the beat, plus a hat on any week busier than usual,
         # louder the bigger the move.
         for i in range(count):
@@ -146,7 +175,7 @@ def build_schedule(prices: list[float], section: SectionId, key: KeyId, bpm: int
             elif moves[i] > typical:
                 add(i, None, 0.3 + 0.6 * min(1, moves[i] / huge), 0.5)
 
-    elif section == "pads":
+    elif style == "chords":
         # One chord per bar (root, third, fifth), on the average price of that
         # bar, louder when the bar was turbulent.
         for i in range(0, count, BAR_STEPS):
@@ -156,8 +185,8 @@ def build_schedule(prices: list[float], section: SectionId, key: KeyId, bpm: int
             for third in (0, 2, 4):
                 add(i, pitch(key, root + third, 3), velocity, BAR_STEPS)
 
-    elif section == "vocals":
-        # Silent most of the time; only the biggest moves (top 3%) get a voice.
+    elif style == "volatility":
+        # Silent most of the time: only the biggest moves (top 3%) make a sound.
         for i in range(count):
             if moves[i] >= huge and moves[i] > 0:
                 add(i, pitch(key, round(level[i] * 7) + 7, 4), 0.9, 2)

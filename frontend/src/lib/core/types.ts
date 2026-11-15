@@ -15,7 +15,7 @@ export type StockInfo = {
   delisted: boolean;
 };
 
-export type SectionId = "melody" | "bass" | "drums" | "pads" | "vocals";
+export type SectionId = "piano" | "guitar" | "synth" | "bass" | "drums" | "chords" | "volatility";
 export type KeyId = "cmaj" | "amin" | "ddor" | "ephr";
 export type Leverage = 1 | 2 | 5 | 10;
 

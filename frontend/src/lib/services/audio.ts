@@ -47,7 +47,7 @@ const CLIP_HEADROOM = 3;
  * The `volume` values (in decibels) balance the instruments against each
  * other. They were measured, not guessed: every instrument played the same
  * test pattern, and each was set so its section comes out equally loud
- * (pads a little quieter, so they sit behind). Tone's instruments are much
+ * (chords a little quieter, so they sit behind). Tone's instruments are much
  * quieter than raw oscillators, which is why most of these are above 0.
  * ------------------------------------------------------------------ */
 
@@ -126,20 +126,21 @@ function noise(synth: Tone.NoiseSynth): Voice {
  * repitching the nearest recording, which is inaudible over that distance.
  *
  * `transpose` shifts what the backend sends into the range the instrument
- * was recorded in. Guitars play the melody an octave down, which is both
- * where guitars sound best and where their recordings are.
+ * was recorded in. The organ plays the tune an octave down, the xylophone an
+ * octave up, and the saxophone an octave down; guitars need no shift, because
+ * the Guitar section already plays in guitar range.
  * ------------------------------------------------------------------ */
 
 type Recording = { folder: string; transpose: number; notes: string[] };
 
 const RECORDINGS: Record<string, Recording> = {
-  "Acoustic guitar": { folder: "guitar-acoustic", transpose: -12, notes: ["F2", "G#2", "B2", "D3", "F3", "G#3", "B3", "D4", "F4", "G#4", "B4", "D5"] },
-  "Electric guitar": { folder: "guitar-electric", transpose: -12, notes: ["E2", "A2", "C3", "D#3", "F#3", "A3", "C4", "D#4", "F#4", "A4", "C5", "D#5", "F#5", "A5"] },
-  "Nylon guitar": { folder: "guitar-nylon", transpose: -12, notes: ["E2", "G#2", "B2", "D3", "F#3", "A3", "C#4", "E4", "G#4", "B4", "D5", "F#5", "G#5"] },
+  "Acoustic guitar": { folder: "guitar-acoustic", transpose: 0, notes: ["F2", "G#2", "B2", "D3", "F3", "G#3", "B3", "D4", "F4", "G#4", "B4", "D5"] },
+  "Electric guitar": { folder: "guitar-electric", transpose: 0, notes: ["E2", "A2", "C3", "D#3", "F#3", "A3", "C4", "D#4", "F#4", "A4", "C5", "D#5", "F#5", "A5"] },
+  "Nylon guitar": { folder: "guitar-nylon", transpose: 0, notes: ["E2", "G#2", "B2", "D3", "F#3", "A3", "C#4", "E4", "G#4", "B4", "D5", "F#5", "G#5"] },
   "Grand piano": { folder: "piano", transpose: 0, notes: ["F3", "G#3", "B3", "D4", "F4", "G#4", "B4", "D5", "F5", "G#5", "B5", "D6", "F6", "G#6"] },
   "Xylophone": { folder: "xylophone", transpose: 12, notes: ["G4", "C5", "G5", "C6", "G6", "C7", "G7", "C8"] },
   "Electric bass": { folder: "bass-electric", transpose: 0, notes: ["E1", "G1", "A#1", "C#2", "E2", "G2", "A#2", "C#3", "E3", "G3", "A#3"] },
-  "Organ": { folder: "organ", transpose: 0, notes: ["D#2", "F#2", "A2", "C3", "D#3", "F#3", "A3", "C4", "D#4", "F#4", "A4", "C5", "D#5"] },
+  "Organ": { folder: "organ", transpose: -12, notes: ["D#2", "F#2", "A2", "C3", "D#3", "F#3", "A3", "C4", "D#4", "F#4", "A4", "C5", "D#5"] },
   "Cello": { folder: "cello", transpose: 0, notes: ["F2", "G#2", "B2", "D3", "F3", "G#3", "B3", "D4", "F4", "G#4", "B4", "C5"] },
   "Saxophone": { folder: "saxophone", transpose: -12, notes: ["F3", "G#3", "B3", "D4", "F4", "G#4", "B4", "D5", "F5", "G#5"] },
   "Trumpet": { folder: "trumpet", transpose: 0, notes: ["F4", "A#4", "D5", "F5", "A5", "C6"] },
@@ -150,13 +151,13 @@ const RECORDINGS: Record<string, Recording> = {
  * section) and how long notes ring after release (seconds).
  */
 const RECORDING_SOUND: Record<string, { volume: number; release: number }> = {
-  "Acoustic guitar": { volume: 0, release: 1 },
-  "Electric guitar": { volume: 5, release: 1 },
-  "Nylon guitar": { volume: 0, release: 1 },
+  "Acoustic guitar": { volume: 2, release: 1 },
+  "Electric guitar": { volume: 4, release: 1 },
+  "Nylon guitar": { volume: 3, release: 1 },
   "Grand piano": { volume: 3, release: 1.2 },
   Xylophone: { volume: 4, release: 0.6 },
   "Electric bass": { volume: 4, release: 0.6 },
-  Organ: { volume: -1, release: 0.4 },
+  Organ: { volume: 7, release: 0.4 },
   Cello: { volume: 1, release: 0.8 },
   Saxophone: { volume: 7, release: 0.4 },
   Trumpet: { volume: 2, release: 0.4 },
@@ -190,7 +191,7 @@ function recorded(name: string): Voice {
 }
 
 const INSTRUMENTS: Record<string, () => Voice> = {
-  /* ---- Melody ---- */
+  /* ---- Tune instruments (Piano and Synth sections) ---- */
   "Saw synth": () =>
     pitched(new Tone.PolySynth(Tone.Synth, {
       oscillator: { type: "fatsawtooth", count: 3, spread: 25 },
@@ -279,7 +280,7 @@ const INSTRUMENTS: Record<string, () => Voice> = {
       24, // two octaves up: a tiny toy drum
     ),
 
-  /* ---- Pads: slow, overlapping chords ---- */
+  /* ---- Chords: slow, overlapping chords ---- */
   "Warm strings": () =>
     pitched(
       new Tone.PolySynth(Tone.Synth, {
@@ -312,7 +313,7 @@ const INSTRUMENTS: Record<string, () => Voice> = {
       volume: 0,
     })),
 
-  /* ---- Vocals: rare, so they can afford to be big ---- */
+  /* ---- Volatility: rare, so they can afford to be big ---- */
   "Vocal chops": () =>
     pitched(new Tone.PolySynth(Tone.FMSynth, {
       harmonicity: 1,

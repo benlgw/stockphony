@@ -35,11 +35,13 @@
     /* One per section. Components reach these through .lane--* classes
        rather than naming them directly, so a card does not need to know
        which section it is in. */
-    --melody: #b8f55a;
+    --piano: #b8f55a;
+    --guitar: #5ce1c6;
+    --synth: #f78fb3;
     --bass: #7cc4ff;
     --drums: #ffc857;
-    --pads: #c9a7ff;
-    --vocals: #ff8a65;
+    --chords: #c9a7ff;
+    --volatility: #ff8a65;
 
     --font-sans: "Space Grotesk", Inter, system-ui, sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, monospace;
@@ -70,11 +72,13 @@
         --chart-base: #c9c7bd;
 
         /* Darkened versions: the neon set is unreadable on a pale background. */
-        --melody: #4a7312;
+        --piano: #4a7312;
+        --guitar: #0f7b69;
+        --synth: #b8326b;
         --bass: #175f9e;
         --drums: #8a5a00;
-        --pads: #5b3da6;
-        --vocals: #b23c20;
+        --chords: #5b3da6;
+        --volatility: #b23c20;
 
         color-scheme: light;
     }

@@ -1,10 +1,18 @@
 import type { KeyId, SectionId } from "$lib/core/types";
 
 /**
- * The five fixed lanes of the mix. Colour is NOT stored here as a hex value
- * used inline: each section gets a CSS class (`lane--melody`, `card--bass`, ...)
- * and the real colours live in the stylesheets, so light and dark mode can
- * differ. This keeps the markup free of inline styles.
+ * The fixed lanes of the mix. Each is a group of instruments AND a playing
+ * style the backend generates (backend/app/music.py, STYLE):
+ *   Piano, Synth  the tune: price goes up, notes go up
+ *   Guitar        picks through chord notes, one per step
+ *   Bass          a smoothed bass line
+ *   Drums         kick on the beat, hats on busy weeks
+ *   Chords        one long chord per bar, underneath everything
+ *   Volatility    silent until the price jumps sharply
+ *
+ * Colour is NOT stored here: each section gets a CSS class (`lane--piano`,
+ * ...) and the colours live in app.css, so light and dark mode can differ.
+ * The first instrument in each list is the one a new stock starts with.
  */
 export type SectionDef = {
   id: SectionId;
@@ -16,11 +24,22 @@ export type SectionDef = {
 
 export const SECTIONS: SectionDef[] = [
   {
-    id: 'melody',
-    name: 'Melody',
+    id: 'piano',
+    name: 'Piano',
     pitched: true,
-    instruments: ['Saw synth', 'Electric piano', 'Glass bells', 'Pluck', 'Flute',
-                  'Grand piano', 'Acoustic guitar', 'Electric guitar', 'Nylon guitar', 'Xylophone'],
+    instruments: ['Grand piano', 'Electric piano', 'Organ'],
+  },
+  {
+    id: 'guitar',
+    name: 'Guitar',
+    pitched: true,
+    instruments: ['Acoustic guitar', 'Electric guitar', 'Nylon guitar'],
+  },
+  {
+    id: 'synth',
+    name: 'Synth',
+    pitched: true,
+    instruments: ['Saw synth', 'Pluck', 'Flute', 'Glass bells', 'Xylophone'],
   },
   {
     id: 'bass',
@@ -35,16 +54,16 @@ export const SECTIONS: SectionDef[] = [
     instruments: ['808 kit', 'Rock kit', 'Lo-fi kit', 'Toy box'],
   },
   {
-    id: 'pads',
-    name: 'Pads',
+    id: 'chords',
+    name: 'Chords',
     pitched: true,
-    instruments: ['Warm strings', 'Brass section', 'Choir pad', 'Space pad', 'Organ', 'Cello'],
+    instruments: ['Warm strings', 'Cello', 'Choir pad', 'Space pad', 'Brass section'],
   },
   {
-    id: 'vocals',
-    name: 'Vocals',
+    id: 'volatility',
+    name: 'Volatility',
     pitched: true,
-    instruments: ['Vocal chops', 'Choir hits', 'Robot voice', 'Crowd cheer', 'Saxophone', 'Trumpet'],
+    instruments: ['Trumpet', 'Saxophone', 'Vocal chops', 'Choir hits', 'Robot voice', 'Crowd cheer'],
   },
 ];
 
