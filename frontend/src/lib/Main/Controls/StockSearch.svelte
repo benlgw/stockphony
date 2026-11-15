@@ -65,7 +65,9 @@
             {query.trim() ? `Nothing matches “${query}”.` : "No stocks left to add."}
         </p>
     {:else}
-        <p class="message">Drag a stock into a section.</p>
+        <p class="message">
+            {query.trim() ? "Drag a stock into a section." : "Popular stocks. Drag one into a section."}
+        </p>
     {/if}
 
     <ul>

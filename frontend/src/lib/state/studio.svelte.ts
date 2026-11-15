@@ -144,6 +144,7 @@ class Studio {
       key: "amin",
       volume: 75,
       bpm: DEFAULT_BPM,
+      leverage: 1,
     };
     this.tracks = [...this.tracks, track];
     audio.setTrackVolume(track.ticker, track.volume);
@@ -169,7 +170,7 @@ class Studio {
    * Patches one track.
    *  - volume:     audio only, nothing to fetch
    *  - instrument: changes the sound but not the timing, so no refetch
-   *  - key, bpm:   change which notes play and when, so new notes are fetched
+   *  - key, bpm, leverage: change which notes play and when, so new notes are fetched
    *
    * `sync: false` updates the screen without fetching. The BPM slider fires
    * an event for every pixel it moves, so it uses this while dragging and
@@ -177,7 +178,7 @@ class Studio {
    */
   updateTrack(
     ticker: string,
-    patch: Partial<Pick<Track, "instrument" | "key" | "volume" | "bpm">>,
+    patch: Partial<Pick<Track, "instrument" | "key" | "volume" | "bpm" | "leverage">>,
     { sync = true }: { sync?: boolean } = {},
   ): void {
     this.tracks = this.tracks.map((t) => (t.ticker === ticker ? { ...t, ...patch } : t));
@@ -186,7 +187,7 @@ class Studio {
 
     if (patch.volume !== undefined) audio.setTrackVolume(ticker, patch.volume);
     if (patch.instrument !== undefined) scheduler.setInstrument(ticker, patch.instrument);
-    if (sync && (patch.key !== undefined || patch.bpm !== undefined)) {
+    if (sync && (patch.key !== undefined || patch.bpm !== undefined || patch.leverage !== undefined)) {
       void this.#loadNotes(track).catch((error) => this.#trackFailed(ticker, error));
     }
   }
@@ -208,7 +209,9 @@ class Studio {
     const id = ++this.#requestCounter;
     this.#latestRequest.set(track.ticker, id);
 
-    const schedule = await getNotes(track.ticker, track.section, track.key, track.bpm);
+    // Leverage happens here: the backend just sees a (possibly very fast) BPM.
+    const bpm = track.bpm * track.leverage;
+    const schedule = await getNotes(track.ticker, track.section, track.key, bpm);
     this.backend = "online";
 
     // Ignore the answer if the track was removed, or a newer request was made.

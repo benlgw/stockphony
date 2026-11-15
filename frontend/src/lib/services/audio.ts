@@ -49,6 +49,49 @@ const VOICES: Record<string, Voice> = {
   'Toy box': { wave: 'square', attack: 0.001, release: 0.15, cutoff: 5000, noise: true },
 };
 
+/**
+ * How loud a track gets at 100% volume. Above 1 is a boost over the original
+ * maximum; the soft clipper in start() is what stops several boosted tracks
+ * distorting harshly when they add up.
+ */
+const MAX_TRACK_GAIN = 1.8;
+const MASTER_GAIN = 0.8;
+
+/**
+ * How much headroom the soft clipper has. Signals up to this level are bent
+ * smoothly instead of cut off; normal levels pass through almost unchanged.
+ */
+const CLIP_HEADROOM = 3;
+
+/**
+ * A "soft clipper": a WaveShaper that bends the signal through tanh.
+ *
+ * Quiet and medium sounds pass through almost unchanged (tanh(x) is nearly x
+ * for small x), so the volume sliders keep their full effect. Only loud peaks
+ * get squashed, smoothly, towards 1, so the output can never exceed the
+ * maximum and crackle the way hard clipping does.
+ *
+ * A WaveShaper only accepts input from -1 to 1, so the signal is scaled down
+ * by CLIP_HEADROOM going in, and the curve scales it back up.
+ */
+function softClipper(ctx: AudioContext): { input: GainNode; output: WaveShaperNode } {
+  const input = ctx.createGain();
+  input.gain.value = 1 / CLIP_HEADROOM;
+
+  const shaper = ctx.createWaveShaper();
+  const size = 4096;
+  const curve = new Float32Array(size);
+  for (let i = 0; i < size; i++) {
+    const x = (i / (size - 1)) * 2 - 1; // -1..1
+    curve[i] = Math.tanh(x * CLIP_HEADROOM);
+  }
+  shaper.curve = curve;
+  shaper.oversample = "4x"; // smooths the bending at high frequencies
+
+  input.connect(shaper);
+  return { input, output: shaper };
+}
+
 const FALLBACK: Voice = { wave: 'triangle', attack: 0.01, release: 0.3, cutoff: 2500 };
 
 /** MIDI note number to frequency. 69 is A4 = 440Hz, 12 semitones per octave. */
@@ -70,8 +113,12 @@ class AudioEngine {
     if (!this.#ctx) {
       this.#ctx = new AudioContext();
       this.#master = this.#ctx.createGain();
-      this.#master.gain.value = 0.7; // headroom, so several tracks don't clip
-      this.#master.connect(this.#ctx.destination);
+      this.#master.gain.value = MASTER_GAIN;
+
+      // Every track -> master -> soft clipper -> speakers.
+      const clipper = softClipper(this.#ctx);
+      this.#master.connect(clipper.input);
+      clipper.output.connect(this.#ctx.destination);
     }
     if (this.#ctx.state === 'suspended') await this.#ctx.resume();
   }
@@ -101,11 +148,14 @@ class AudioEngine {
     return gain;
   }
 
-  /** Volume slider, 0-100. Squared because loudness is perceived non-linearly. */
+  /**
+   * Volume slider, 0-100. Squared because hearing is roughly logarithmic: with
+   * a straight line, the top half of the slider would barely change anything.
+   */
   setTrackVolume(ticker: string, volume: number): void {
     const gain = this.#gainFor(ticker);
     if (gain && this.#ctx) {
-      const level = (volume / 100) ** 2;
+      const level = (volume / 100) ** 2 * MAX_TRACK_GAIN;
       // setTargetAtTime ramps instead of jumping, which avoids clicks.
       gain.gain.setTargetAtTime(level, this.#ctx.currentTime, 0.02);
     }

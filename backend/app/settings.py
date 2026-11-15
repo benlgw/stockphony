@@ -45,6 +45,14 @@ CACHE_MAX_AGE_HOURS = float(os.getenv("CACHE_MAX_AGE_HOURS", "24"))
 # a user is most likely to drag in is already cached when they do.
 PRELOAD_TOP_N = int(os.getenv("PRELOAD_TOP_N", "3"))
 
+# Shown when the search box is empty, in this order. Without this, an empty
+# search returns every stock sorted by ticker length: A, B, C, ... AA, AB.
+POPULAR_TICKERS = [
+    "NVDA", "AAPL", "TSLA", "GME", "MSFT", "AMZN", "META", "GOOGL",
+    "NFLX", "AMD", "PLTR", "COIN", "DIS", "KO", "MCD", "NKE",
+    "SBUX", "SPOT", "UBER", "WMT", "JPM", "XOM", "INTC", "BRK-B",
+]
+
 # Trading days squashed into one musical step. 5 is roughly a week, which turns
 # ten years of history into ~500 steps: about two minutes of music at 120 BPM.
 DAYS_PER_STEP = 5

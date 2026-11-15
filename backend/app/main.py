@@ -107,7 +107,9 @@ def notes(
     ticker: str,
     section: music.SectionId,
     key: music.KeyId = "amin",
-    bpm: int = Query(120, ge=40, le=240),
+    # Up to 2400 because the frontend's leverage buttons multiply a stock's
+    # BPM (max 200) by up to 10x, and sends the result.
+    bpm: int = Query(120, ge=40, le=2400),
 ) -> NoteSchedule:
     # Section and key are Literal types, so FastAPI rejects anything else with
     # a 422 before this code runs, and /docs shows them as dropdowns.

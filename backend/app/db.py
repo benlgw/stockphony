@@ -61,9 +61,22 @@ def _load_search_query() -> str:
 SEARCH_SQL = _load_search_query()
 
 
+POPULAR_SQL = """
+    SELECT ticker, name, delisted_on IS NOT NULL AS delisted
+    FROM stocks
+    WHERE ticker = ANY(%(tickers)s)
+    ORDER BY array_position(%(tickers)s, ticker)   -- keep the list's order
+"""
+
+
 def search_stocks(query: str) -> list[dict]:
+    query = query.strip()
     with connect() as conn:
-        rows = conn.execute(SEARCH_SQL, {"q": query.strip()}).fetchall()
+        if query:
+            rows = conn.execute(SEARCH_SQL, {"q": query}).fetchall()
+        else:
+            # An empty box shows well-known stocks rather than the whole table.
+            rows = conn.execute(POPULAR_SQL, {"tickers": settings.POPULAR_TICKERS}).fetchall()
         if not rows:
             return []
         # Hide stocks we already know have no price history: in the demo, a

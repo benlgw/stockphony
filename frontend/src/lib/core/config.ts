@@ -16,3 +16,9 @@ export const MAX_CHART_POINTS = 400;
 export const DEFAULT_BPM = 120;
 export const MIN_BPM = 60;
 export const MAX_BPM = 200;
+
+/**
+ * Leverage multiplies a stock's BPM, like leverage multiplies a position:
+ * 10x turns 120 BPM into 1200. The backend accepts up to 2400 (200 x 10).
+ */
+export const LEVERAGE_OPTIONS = [1, 2, 5, 10] as const;

@@ -17,6 +17,7 @@ export type StockInfo = {
 
 export type SectionId = "melody" | "bass" | "drums" | "pads" | "vocals";
 export type KeyId = "cmaj" | "amin" | "ddor" | "ephr";
+export type Leverage = 1 | 2 | 5 | 10;
 
 /** A stock that has been dropped into a section and is part of the mix. */
 export type Track = {
@@ -28,8 +29,10 @@ export type Track = {
   key: KeyId;
   /** 0-100. Only an audio gain, so it never goes to the backend. */
   volume: number;
-  /** This stock's own tempo. The backend uses it to time the notes. */
+  /** This stock's own tempo, before leverage. */
   bpm: number;
+  /** Multiplies bpm. The backend is sent bpm x leverage. */
+  leverage: Leverage;
 };
 
 /* ------------------------------------------------------------------ *

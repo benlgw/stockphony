@@ -3,7 +3,7 @@
      * One stock in the mix: instrument and key on the left; chart, tempo and
      * volume filling the rest of the row.
      */
-    import { MAX_BPM, MIN_BPM } from "$lib/core/config";
+    import { LEVERAGE_OPTIONS, MAX_BPM, MIN_BPM } from "$lib/core/config";
     import { KEYS } from "$lib/core/sections";
     import type { SectionDef } from "$lib/core/sections";
     import { studio } from "$lib/state/studio.svelte";
@@ -25,6 +25,9 @@
     const keyId = $derived(`key-${track.ticker}`);
     const volumeId = $derived(`volume-${track.ticker}`);
     const bpmId = $derived(`bpm-${track.ticker}`);
+
+    /** The tempo it actually plays at, shown beside the BPM slider. */
+    const effectiveBpm = $derived(track.bpm * track.leverage);
 </script>
 
 <article class="card">
@@ -78,19 +81,43 @@
     </div>
 
     <div class="playback">
-        <!-- The chart shares a row with the remove button, so it can use the
-             card's full height instead of sitting under a header row. -->
+        <!-- The chart shares a row with a narrow column of controls, so it can
+             use the card's full height instead of sitting under a header row. -->
         <div class="chart-row">
             <PriceChart {points} {playhead} {error} />
-            <button
-                class="remove"
-                onclick={() => studio.removeTrack(track.ticker)}
-                aria-label="Remove {track.ticker} from the mix"
-            >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
-            </button>
+
+            <div class="side">
+                <button
+                    class="remove"
+                    onclick={() => studio.removeTrack(track.ticker)}
+                    aria-label="Remove {track.ticker} from the mix"
+                >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                </button>
+
+                <!--
+                  Real radio buttons, styled as a column of buttons. Using native
+                  inputs means keyboard support comes free: Tab reaches the group
+                  and the arrow keys move between options.
+                -->
+                <fieldset class="leverage">
+                    <legend class="visually-hidden">Leverage for {track.ticker}</legend>
+                    {#each LEVERAGE_OPTIONS as option (option)}
+                        <label class:is-selected={track.leverage === option}>
+                            <input
+                                type="radio"
+                                name="leverage-{track.ticker}"
+                                value={option}
+                                checked={track.leverage === option}
+                                onchange={() => studio.updateTrack(track.ticker, { leverage: option })}
+                            />
+                            {option}×
+                        </label>
+                    {/each}
+                </fieldset>
+            </div>
         </div>
 
         <!--
@@ -121,7 +148,7 @@
                         bpm: Number(event.currentTarget.value),
                     })}
             />
-            <span class="value">{track.bpm}</span>
+            <span class="value" class:is-leveraged={track.leverage > 1}>{effectiveBpm}</span>
 
             <label for={volumeId}>Volume</label>
             <input
@@ -231,8 +258,7 @@
     }
 
     /* Grows to fill whatever height the sliders leave. align-items: stretch
-       (the default) makes the chart as tall as the row; the button opts out
-       with align-self so it stays a 44px square in the top corner. */
+       (the default) makes the chart as tall as the row. */
     .chart-row {
         flex: 1 1 auto;
         display: flex;
@@ -240,8 +266,16 @@
         min-height: 0;
     }
 
+    /* The column beside the chart: remove button on top, leverage below it.
+       Fixed width so every card's chart ends at the same x. */
+    .side {
+        flex: 0 0 44px;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
     .remove {
-        align-self: flex-start;
         width: 44px;
         height: 44px;
         flex-shrink: 0;
@@ -267,11 +301,12 @@
         stroke-linecap: round;
     }
 
-    /* Three columns: label, slider, value. "auto" sizes the label column to the
-       wider of the two labels, so both slider tracks start at the same x. */
+    /* Three columns: label, slider, value. "auto" sizes the label column to
+       the wider label, so both slider tracks start at the same x. The value
+       column is 40px so a leveraged tempo like 1200 fits. */
     .sliders {
         display: grid;
-        grid-template-columns: auto minmax(0, 1fr) 32px;
+        grid-template-columns: auto minmax(0, 1fr) 40px;
         align-items: center;
         column-gap: 0.75rem;
         row-gap: 0.5rem;
@@ -285,5 +320,62 @@
         font-family: var(--font-mono);
         font-size: 0.8125rem;
         text-align: right;
+    }
+
+    /* Leveraged tempos stand out, since they can be 10x the slider. */
+    .value.is-leveraged {
+        color: var(--accent);
+        font-weight: 600;
+    }
+
+    .leverage {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin: 0;
+        padding: 2px;
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        background: var(--bg);
+    }
+
+    .leverage label {
+        position: relative;
+        padding: 3px 0;
+        border-radius: 6px;
+        font-family: var(--font-mono);
+        text-align: center;
+        cursor: pointer;
+    }
+
+    /* The radio circle is hidden but still there, stretched over its label:
+       it stays clickable and focusable, the label provides the look. */
+    .leverage input {
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .leverage label.is-selected {
+        background: var(--accent);
+        color: var(--on-accent);
+    }
+
+    /* The input is invisible, so its keyboard focus ring goes on the label. */
+    .leverage label:has(input:focus-visible) {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+    }
+
+    /* Hidden on screen, still read out by screen readers. */
+    .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
     }
 </style>
