@@ -31,12 +31,11 @@
         gap: 0.875rem;
     }
 
+    /* The image is trimmed to the logo itself (no empty canvas around it),
+       so a fixed height with automatic width shows all of it, undistorted. */
     .logo {
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
-        /* The source image may not be square; cover crops rather than squashes. */
-        object-fit: cover;
+        height: 64px;
+        width: auto;
     }
 
     h1 {
