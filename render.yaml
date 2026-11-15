@@ -1,0 +1,35 @@
+# Render Blueprint: the whole app, web service and database, in one go.
+#
+# In Render: New -> Blueprint -> choose this repo -> enter your Alpaca keys
+# when asked -> Apply. The database's address is wired in automatically, and
+# on its first start the app creates its tables and loads the stock list.
+#
+# Free plan notes: the web service sleeps after 15 minutes without visitors
+# and takes about a minute to wake; the free database expires after 30 days.
+
+services:
+  - type: web
+    name: stockphony
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stockphony-db
+          property: connectionString
+      # Secrets: Render asks for these when you apply the Blueprint, and
+      # they're never stored in this file.
+      - key: ALPACA_API_KEY
+        sync: false
+      - key: ALPACA_SECRET_KEY
+        sync: false
+
+databases:
+  - name: stockphony-db
+    plan: free
+    region: frankfurt
+    databaseName: stocks
+    user: stockphony

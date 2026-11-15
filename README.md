@@ -46,6 +46,14 @@ You'll need Docker, Python 3.11+ (with uv or pip), Node with pnpm, and a free
 1. **Backend:** follow [`backend/README.md`](backend/README.md) to start the database and the API.
 2. **Frontend:** follow [`frontend/README.md`](frontend/README.md), then open http://localhost:5173.
 
+## Hosting
+
+The repo deploys to [Render](https://render.com) as a Blueprint
+(`render.yaml`): one web service that serves both the API and the frontend,
+plus a Postgres database. In Render, choose **New → Blueprint**, pick this
+repo, enter the Alpaca keys when asked, and apply. On its first start, the app
+creates its tables and loads the stock list by itself.
+
 ## Credits
 
 - **Instrument samples:** the recorded instruments (guitars, piano, organ, cello, saxophone, trumpet and others) are from [tonejs-instruments](https://github.com/nbrosowsky/tonejs-instruments) by Nicholas Brosowsky, licensed [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). We include a subset of the notes, re-encoded to smaller files.

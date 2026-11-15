@@ -18,10 +18,12 @@ GET  /api/stocks/{ticker}/notes       when to play which notes, for one section/
 from __future__ import annotations
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from . import db, music, prices, settings
 from .models import Health, History, NoteSchedule, Point, StockInfo
@@ -31,8 +33,12 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Runs once at startup: make sure the price cache tables exist.
-    db.ensure_schema()
+    # Runs once at startup, and sets up a brand-new database by itself:
+    db.ensure_schema()                 # 1. tables and the search index
+    db.load_stock_snapshot_if_empty()  # 2. the stock list, if there isn't one
+    # 3. Fetch the popular stocks' prices in the background, so the stocks
+    #    people try first play instantly. Already-cached ones are skipped.
+    threading.Thread(target=prices.preload, args=(settings.POPULAR_TICKERS,), daemon=True).start()
     yield
 
 
@@ -116,3 +122,10 @@ def notes(
     steps = _weekly_points(ticker)
     schedule = music.build_schedule([close for _, close in steps], section, key, bpm)
     return NoteSchedule(ticker=ticker.upper(), **schedule)
+
+
+# Serve the built frontend at "/", so the whole app is one URL when hosted.
+# This must come after every /api route: a mount at "/" catches whatever
+# hasn't matched a route above it. html=True makes "/" serve index.html.
+if settings.FRONTEND_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=settings.FRONTEND_DIST, html=True), name="frontend")

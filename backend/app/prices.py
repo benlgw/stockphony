@@ -78,11 +78,17 @@ def get_daily_closes(ticker: str) -> list[tuple[date, float]]:
 
 def preload(tickers: list[str]) -> None:
     """Warms the cache. Runs in the background, so it logs failures, never raises."""
+    if settings.PRICE_SOURCE == "alpaca" and not (settings.ALPACA_API_KEY and settings.ALPACA_SECRET_KEY):
+        # Every fetch would fail the same way; one line beats a warning per stock.
+        log.warning("Skipping preload: ALPACA_API_KEY and ALPACA_SECRET_KEY aren't set")
+        return
     for ticker in tickers:
         try:
             get_daily_closes(ticker)
         except NoPriceData:
             pass  # recorded in the cache; search hides it from now on
+        except PriceSourceError as error:
+            log.warning("Preloading %s failed: %s", ticker, error)
         except Exception:
             log.exception("Preloading %s failed", ticker)
 

@@ -49,7 +49,12 @@ log = logging.getLogger("stockphony.db")
 
 def ensure_schema(wait_seconds: float = 10) -> None:
     """
-    Creates the price cache tables, waiting briefly for the database first.
+    Creates every table the app needs, waiting briefly for the database first.
+
+    That's the stock list and search index from db/01-schema.sql, plus the
+    price cache below. Every statement is IF NOT EXISTS, so on a database
+    that already has them (like your local one) this changes nothing. On a
+    brand-new hosted database, it's what sets everything up.
 
     The wait covers starting the database and the server at the same moment:
     Postgres takes a few seconds to accept connections. If it still isn't
@@ -61,6 +66,7 @@ def ensure_schema(wait_seconds: float = 10) -> None:
     while True:
         try:
             with connect() as conn:
+                conn.execute((settings.BACKEND_DIR / "db" / "01-schema.sql").read_text())
                 conn.execute(SCHEMA)
             return
         except psycopg.OperationalError:
@@ -77,6 +83,33 @@ def ensure_schema(wait_seconds: float = 10) -> None:
         f"Can't reach the database at {_where()}. Is it running? "
         "Start it from backend/ with: docker compose up -d"
     ) from None
+
+
+def load_stock_snapshot_if_empty() -> None:
+    """
+    Fills an empty stock list from db/stocks.csv, a snapshot of the SEC list
+    that scripts/load_stocks.py fetches. It means a new hosted database works
+    straight away, without running the script or needing an SEC email.
+
+    "Empty" is under 1,000 rows, so the 10 rows from 02-seed.sql still count.
+    Your local database, already loaded with the full list, is left alone.
+    """
+    with connect() as conn:
+        if conn.execute("SELECT count(*) AS n FROM stocks").fetchone()["n"] >= 1000:
+            return
+        # Copy into a scratch table first, so tickers already present (the
+        # seed rows) are skipped rather than failing the whole load.
+        conn.execute("CREATE TEMP TABLE stock_snapshot (ticker TEXT, name TEXT) ON COMMIT DROP")
+        with conn.cursor().copy("COPY stock_snapshot FROM STDIN WITH (FORMAT csv, HEADER true)") as copy:
+            copy.write((settings.BACKEND_DIR / "db" / "stocks.csv").read_bytes())
+        added = conn.execute(
+            """
+            INSERT INTO stocks (ticker, name)
+            SELECT ticker, name FROM stock_snapshot
+            ON CONFLICT (ticker) DO NOTHING
+            """
+        ).rowcount
+    log.info("Loaded %s stocks from db/stocks.csv", f"{added:,}")
 
 
 def _where() -> str:

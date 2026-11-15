@@ -53,6 +53,11 @@ POPULAR_TICKERS = [
     "SBUX", "SPOT", "UBER", "WMT", "JPM", "XOM", "INTC", "BRK-B",
 ]
 
+# The built frontend. When this folder exists, the backend serves it at "/", so
+# the whole app is one URL. It's where `pnpm build` puts it locally, and where
+# the Dockerfile copies it when hosting.
+FRONTEND_DIST = Path(os.getenv("FRONTEND_DIST", BACKEND_DIR.parent / "frontend" / "dist"))
+
 # Trading days squashed into one musical step. 5 is roughly a week, which turns
 # ten years of history into ~500 steps: about two minutes of music at 120 BPM.
 DAYS_PER_STEP = 5

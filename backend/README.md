@@ -22,11 +22,9 @@ RuntimeError: Can't reach the database at localhost:5432/stocks. Is it running?
 If you see that, run `docker compose up -d` and start the API again. To check
 the database is up, run `docker compose ps`: it should say `healthy`.
 
-The first time, also load the full list of stocks (it only needs doing once):
-
-```bash
-uv run python scripts/load_stocks.py
-```
+On its first start, the API loads the list of about 6,400 stocks from
+`db/stocks.csv` by itself. To refresh that list from the SEC later, run
+`uv run python scripts/load_stocks.py`.
 
 Then open **http://localhost:8000/docs**: every endpoint, with a "Try it out"
 button. The frontend reaches the API through Vite's `/api` proxy, so start
@@ -104,6 +102,6 @@ uv run python -m app.preload NVDA AAPL GME TSLA
 ## Database
 
 ```bash
-uv run python scripts/load_stocks.py    # load every US-listed stock (once)
+uv run python scripts/load_stocks.py    # refresh the stock list from the SEC (optional)
 docker compose exec db psql -U composer -d stocks
 ```
