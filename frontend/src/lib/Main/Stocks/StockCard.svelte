@@ -30,7 +30,8 @@
     const effectiveBpm = $derived(track.bpm * track.leverage);
 </script>
 
-<article class="card">
+<!-- The id lets the search scroll a newly added stock into view. -->
+<article class="card" id="card-{track.ticker}">
     <div class="settings">
         <div class="identity">
             <h3>{track.ticker}</h3>
@@ -377,5 +378,54 @@
         overflow: hidden;
         clip-path: inset(50%);
         white-space: nowrap;
+    }
+
+    /* Phone layout: 760px and narrower. Every component uses this same breakpoint. */
+    @media (max-width: 760px) {
+        /* Everything stacks: name, then instrument and key side by side,
+           then the chart, the leverage row, and the sliders. */
+        .card {
+            flex-direction: column;
+            gap: 0.875rem;
+            padding: 0.875rem;
+        }
+
+        .settings {
+            flex: none;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.625rem;
+        }
+
+        .identity {
+            grid-column: 1 / -1;
+        }
+
+        /* iPhones zoom the whole page into any form field whose text is
+           under 16px when it's tapped. 16px stops that. */
+        select {
+            font-size: 16px;
+        }
+
+        .chart-row {
+            flex-direction: column;
+        }
+
+        /* The cross and leverage buttons become one row under the chart:
+           row-reverse puts the cross on the right, leverage on the left. */
+        .side {
+            flex: none;
+            flex-direction: row-reverse;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .leverage {
+            flex-direction: row;
+        }
+
+        .leverage label {
+            padding: 8px 12px;
+        }
     }
 </style>

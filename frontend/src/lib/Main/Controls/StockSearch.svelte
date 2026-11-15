@@ -40,6 +40,9 @@
 
     /** Stocks already in the mix are hidden, so none can be added twice. */
     const available = $derived(results.filter((stock) => !studio.hasTrack(stock.ticker)));
+
+    /** The result whose section picker is open. Only one at a time. */
+    let openTicker = $state<string | null>(null);
 </script>
 
 <div class="search">
@@ -65,14 +68,28 @@
             {query.trim() ? `Nothing matches “${query}”.` : "No stocks left to add."}
         </p>
     {:else}
+        <!--
+          Laptops keep the original wording. Touchscreens can't drag and drop,
+          so they're told to tap instead.
+        -->
         <p class="message">
-            {query.trim() ? "Drag a stock into a section." : "Popular stocks. Drag one into a section."}
+            <span class="hint-pointer">
+                {query.trim() ? "Drag a stock into a section." : "Popular stocks. Drag one into a section."}
+            </span>
+            <span class="hint-touch">
+                {query.trim() ? "Tap a stock to add it." : "Popular stocks. Tap one to add it."}
+            </span>
         </p>
     {/if}
 
     <ul>
         {#each available as stock (stock.ticker)}
-            <SearchResult {stock} />
+            <SearchResult
+                {stock}
+                open={openTicker === stock.ticker}
+                ontoggle={() => (openTicker = openTicker === stock.ticker ? null : stock.ticker)}
+                onadded={() => (openTicker = null)}
+            />
         {/each}
     </ul>
 </div>
@@ -143,5 +160,34 @@
            pushing the transport buttons off screen. */
         max-height: 420px;
         overflow-y: auto;
+    }
+
+    /* Phone layout: 760px and narrower. Every component uses this same breakpoint. */
+    @media (max-width: 760px) {
+        /* Shorter, so the sections below are only a scroll away. */
+        ul {
+            max-height: 260px;
+        }
+
+        /* iPhones zoom the page into fields with text under 16px. */
+        input {
+            font-size: 16px;
+        }
+    }
+
+    /* "pointer: coarse" means the main pointer is a finger, whatever the
+       screen size, so a touchscreen laptop gets the touch wording too. */
+    .hint-touch {
+        display: none;
+    }
+
+    @media (pointer: coarse) {
+        .hint-pointer {
+            display: none;
+        }
+
+        .hint-touch {
+            display: inline;
+        }
     }
 </style>

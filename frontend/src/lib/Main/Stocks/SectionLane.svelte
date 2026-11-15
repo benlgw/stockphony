@@ -142,4 +142,12 @@ handler. Keyboard users add stocks with the + menu on each search result.
         font-size: 0.875rem;
         color: var(--muted);
     }
+
+    /* Phone layout: 760px and narrower. Every component uses this same breakpoint. */
+    @media (max-width: 760px) {
+        .lane {
+            padding: 0.75rem;
+            border-radius: 18px;
+        }
+    }
 </style>

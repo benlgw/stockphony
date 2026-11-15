@@ -61,4 +61,21 @@
         font-weight: 600;
         color: var(--text);
     }
+
+    /* Phone layout: 760px and narrower. Every component uses this same breakpoint. */
+    @media (max-width: 760px) {
+        header {
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            padding: 1rem 0;
+        }
+
+        .logo {
+            height: 48px;
+        }
+
+        .stock-history {
+            font-size: 0.8125rem;
+        }
+    }
 </style>

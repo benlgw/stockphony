@@ -43,4 +43,11 @@
         z-index: 10;
         pointer-events: none;
     }
+
+    /* Phone layout: 760px and narrower. Every component uses this same breakpoint. */
+    @media (max-width: 760px) {
+        :global(#app) {
+            padding: 0 1rem calc(5.5rem + env(safe-area-inset-bottom, 0px));
+        }
+    }
 </style>

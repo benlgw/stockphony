@@ -397,6 +397,12 @@ class AudioEngine {
   /** Browsers block audio until the user interacts, so this runs from the play button. */
   async start(): Promise<void> {
     this.#enabled = true;
+    // iPhones mute web audio while the silent switch is on, because Safari
+    // treats it like a notification sound by default. Telling Safari this is
+    // media playback (supported since iOS 17) makes it play like music does.
+    // Other browsers don't have navigator.audioSession and skip this.
+    const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    if (session) session.type = "playback";
     await Tone.start();
     this.#masterBus();
   }

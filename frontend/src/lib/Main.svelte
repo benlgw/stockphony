@@ -18,4 +18,11 @@
         gap: 1.25rem;
         align-items: start;
     }
+
+    /* Phone layout: 760px and narrower. Every component uses this same breakpoint. */
+    @media (max-width: 760px) {
+        main {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
 </style>
