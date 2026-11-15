@@ -16,11 +16,11 @@ import type { NoteSchedule } from "$lib/core/types";
 
 const TICK_MS = 25;
 /** How far ahead to queue notes. Must comfortably exceed TICK_MS. */
-const LOOKAHEAD_S = 0.15;
+const LOOKAHEAD_S = 0.4;
 /** A brief gap before a new loop starts, so its first note isn't already late. */
 const START_DELAY_S = 0.05;
 /** Notes this late are dropped instead of played (e.g. after the tab was hidden). */
-const LATE_S = 0.25;
+const LATE_S = 0.6;
 
 type Playing = {
   schedule: NoteSchedule;
