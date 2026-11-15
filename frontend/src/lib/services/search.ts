@@ -1,26 +1,22 @@
 /**
  * Stock search.
  *
- * The matching itself happens in Postgres (pg_trgm), not here: the database
- * already holds every ticker, and trigram similarity copes with typos far
- * better than anything short we would write in JS. The frontend's whole job
- * is to debounce keystrokes, call the endpoint and cancel stale requests.
+ * The matching itself happens in Postgres (pg_trgm), not here. The frontend's
+ * job is to debounce keystrokes, call the endpoint and cancel stale requests.
+ * The backend also starts preloading the top results' prices when it answers.
  */
 
-import { API_URL, USE_MOCK } from "$lib/core/config";
-import { mockSearch } from "$lib/services/mock";
+import { API_URL } from "$lib/core/config";
 import type { StockInfo } from "$lib/core/types";
 
 /**
- * GET /api/stocks/search?q=lmn%20bro
- *   -> [{ "ticker": "LEH", "name": "Lehman Brothers", "delisted": true }]
+ * GET /api/stocks/search?q=nvdia
+ *   -> [{ "ticker": "NVDA", "name": "Nvidia Corp", "delisted": false }, ...]
  *
  * `signal` lets a newer keystroke abort an in-flight request, so results
  * cannot arrive out of order and overwrite newer ones.
  */
 export async function searchStocks(query: string, signal?: AbortSignal): Promise<StockInfo[]> {
-  if (USE_MOCK) return mockSearch(query);
-
   const url = `${API_URL}/api/stocks/search?q=${encodeURIComponent(query)}`;
   const response = await fetch(url, { signal });
   if (!response.ok) throw new Error(`Search failed (${response.status})`);

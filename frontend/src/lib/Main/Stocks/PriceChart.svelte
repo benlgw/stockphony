@@ -17,7 +17,11 @@
   import { MAX_CHART_POINTS } from "$lib/core/config";
   import type { Point } from "$lib/core/types";
 
-  let { points, playhead }: { points: Point[]; playhead: number } = $props();
+  let {
+    points,
+    playhead,
+    error = null,
+  }: { points: Point[]; playhead: number; error?: string | null } = $props();
 
   // A fixed drawing grid; the SVG scales to its container via viewBox.
   const WIDTH = 600;
@@ -84,7 +88,8 @@
       <line class="playhead" x1={headX} x2={headX} y1="0" y2={HEIGHT} />
     </svg>
   {:else}
-    <p class="loading">Waiting for price history…</p>
+    <!-- With no chart to draw, show why: an error if there is one, otherwise still loading. -->
+    <p class="loading" class:is-error={error}>{error ?? "Loading price history…"}</p>
   {/if}
 </div>
 
@@ -133,5 +138,10 @@
     margin: auto;
     font-size: 13px;
     color: var(--muted);
+  }
+
+  /* Two classes, so it outranks .loading's colour whatever the order. */
+  .loading.is-error {
+    color: var(--danger);
   }
 </style>

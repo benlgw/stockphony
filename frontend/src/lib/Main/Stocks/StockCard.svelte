@@ -16,6 +16,8 @@
     // history and note messages arrive.
     const points = $derived(studio.history[track.ticker] ?? []);
     const playhead = $derived(studio.playheads[track.ticker] ?? 0);
+    // e.g. "No price history for LEH": shown in place of the chart.
+    const error = $derived(studio.trackErrors[track.ticker] ?? null);
 
     // $derived, not plain consts: Svelte reuses this component when the list
     // changes, and a const would keep the ticker it was first created with.
@@ -79,7 +81,7 @@
         <!-- The chart shares a row with the remove button, so it can use the
              card's full height instead of sitting under a header row. -->
         <div class="chart-row">
-            <PriceChart {points} {playhead} />
+            <PriceChart {points} {playhead} {error} />
             <button
                 class="remove"
                 onclick={() => studio.removeTrack(track.ticker)}

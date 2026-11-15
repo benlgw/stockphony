@@ -1,6 +1,7 @@
 <script lang="ts">
     /** One row of the search results. Drag it into a section to add the stock. */
     import type { StockInfo } from "$lib/core/types";
+    import { preloadStock } from "$lib/services/api";
 
     let { stock }: { stock: StockInfo } = $props();
 
@@ -9,6 +10,10 @@
         // just the ticker, so the lane does not have to look the stock up again.
         event.dataTransfer?.setData("application/json", JSON.stringify(stock));
         if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
+
+        // Picking a stock up is a strong hint it's about to be added, so ask
+        // the backend to start fetching its prices while it's being dragged.
+        preloadStock(stock.ticker);
     }
 </script>
 

@@ -1,22 +1,22 @@
 /**
- * Shared types for the app and, more importantly, the WebSocket protocol.
- * This file is the contract between this frontend and the Python backend:
- * if you change a message shape here, tell whoever owns the backend.
+ * Shared types: the app's own data, and the shapes the backend's REST API
+ * returns. The backend defines the same shapes in backend/app/models.py;
+ * if one changes, change the other.
  */
 
-/** One point on a price chart. `date` is ISO ("2024-03-15"), `close` is the closing price. */
+/** One point on a price chart, roughly a week apart. `date` is ISO ("2024-03-15"). */
 export type Point = { date: string; close: number };
 
 /** A row in the stock database, as returned by the search endpoint. */
 export type StockInfo = {
   ticker: string;
   name: string;
-  /** True for companies that no longer trade (Lehman, Enron, Blockbuster...). */
+  /** True for companies that no longer trade. */
   delisted: boolean;
 };
 
-export type SectionId = 'melody' | 'bass' | 'drums' | 'pads' | 'vocals';
-export type KeyId = 'cmaj' | 'amin' | 'ddor' | 'ephr';
+export type SectionId = "melody" | "bass" | "drums" | "pads" | "vocals";
+export type KeyId = "cmaj" | "amin" | "ddor" | "ephr";
 
 /** A stock that has been dropped into a section and is part of the mix. */
 export type Track = {
@@ -26,72 +26,45 @@ export type Track = {
   section: SectionId;
   instrument: string;
   key: KeyId;
-  /** 0-100. Stays on the client: it is just an audio gain, the backend does not need it. */
+  /** 0-100. Only an audio gain, so it never goes to the backend. */
   volume: number;
-  /**
-   * This stock's own tempo. Each track runs on its own clock, so the backend
-   * needs it to schedule that track's notes.
-   */
+  /** This stock's own tempo. The backend uses it to time the notes. */
   bpm: number;
 };
 
 /* ------------------------------------------------------------------ *
- * Backend -> frontend
+ * REST API responses
  * ------------------------------------------------------------------ */
 
-export type ServerMessage =
-  /** Sent once on connect so the UI can show the backend's real transport state. */
-  | { type: 'ready'; playing: boolean }
-  /** Full price history for a ticker, sent after the frontend adds it. Drives the chart. */
-  | { type: 'history'; ticker: string; points: Point[] }
-  /**
-   * "Play a sound now." The backend decides when each track sounds, so this is
-   * the only thing that makes noise.
-   *  - step:       which index of that stock's history this note represents, so
-   *                the frontend can move the chart playhead in time with the audio.
-   *  - pitch:      MIDI note number, or null for unpitched sections such as drums.
-   *  - velocity:   0-1, how hard to hit it.
-   *  - durationMs: how long the note rings for.
-   *  - inMs:       optional. How far in the FUTURE to play it, measured from arrival.
-   *                Sending notes ~100ms early and scheduling them precisely is what
-   *                keeps the timing tight. It is relative on purpose: the two machines'
-   *                clocks do not have to agree on the time of day.
-   */
-  | {
-      type: 'note';
-      ticker: string;
-      step: number;
-      pitch: number | null;
-      velocity: number;
-      durationMs: number;
-      inMs?: number;
-    }
-  /** Transport changed (possibly by another client, or by the backend itself). */
-  | { type: 'transport'; playing: boolean }
-  /** Something went wrong with a request. Shown in the UI, not thrown away. */
-  | { type: 'error'; message: string };
+/** GET /api/stocks/{ticker}/history */
+export type History = {
+  ticker: string;
+  /** Trading days per point. Points line up with note steps: step N is points[N]. */
+  daysPerStep: number;
+  points: Point[];
+};
 
-/* ------------------------------------------------------------------ *
- * Frontend -> backend
- * ------------------------------------------------------------------ */
+/** One note to play. */
+export type Note = {
+  step: number;
+  /** When to play it, in ms from the start of the loop. */
+  timeMs: number;
+  /** MIDI note number (60 = middle C), or null for unpitched drums. */
+  pitch: number | null;
+  /** 0-1, how hard to play it. */
+  velocity: number;
+  durationMs: number;
+};
 
-export type ClientMessage =
-  /** Add a stock to the mix. The backend starts sending notes and history for it. */
-  | {
-      type: 'addTrack';
-      ticker: string;
-      section: SectionId;
-      instrument: string;
-      key: KeyId;
-      bpm: number;
-    }
-  /** Remove it again: stop sending notes for this ticker. */
-  | { type: 'removeTrack'; ticker: string }
-  /**
-   * Instrument, key or tempo changed. Only the fields that changed are sent.
-   * Key affects which notes the backend picks; bpm how often it sends them.
-   */
-  | { type: 'updateTrack'; ticker: string; instrument?: string; key?: KeyId; bpm?: number }
-  | { type: 'setTransport'; playing: boolean }
-  /** Send every loop back to its first step. */
-  | { type: 'restart' };
+/** GET /api/stocks/{ticker}/notes: every note in one loop of one track. */
+export type NoteSchedule = {
+  ticker: string;
+  section: SectionId;
+  key: KeyId;
+  bpm: number;
+  stepMs: number;
+  loopSteps: number;
+  /** The loop's length. After this, it starts again from timeMs 0. */
+  loopMs: number;
+  notes: Note[];
+};

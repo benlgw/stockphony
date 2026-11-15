@@ -1,19 +1,16 @@
 /**
  * Web Audio playback.
  *
- * The backend decides WHEN to play; this file decides WHAT it sounds like.
- * One AudioContext for the whole app, one gain node per track, so adding
- * stocks scales: each new track is two extra nodes, not a new audio graph.
+ * The backend decides WHEN notes play, the scheduler decides when to queue
+ * them, and this file decides what they SOUND like. One AudioContext for the
+ * whole app, one gain node per track, so adding stocks scales: each new track
+ * is two extra nodes, not a new audio graph.
  *
- * Why Web Audio rather than <audio> elements or a library like Tone.js:
- * notes have to land at an exact moment, and only Web Audio lets you schedule
- * ahead on the audio clock. Tone.js would also work and has nicer instruments,
- * but it wants to own the transport, which here belongs to the backend.
+ * Why Web Audio rather than <audio> elements: notes have to land at an exact
+ * moment, and only Web Audio lets you schedule ahead on the audio clock.
  */
 
-import type { ServerMessage } from "$lib/core/types";
-
-type NoteMessage = Extract<ServerMessage, { type: 'note' }>;
+import type { Note } from "$lib/core/types";
 
 /** How each instrument name maps onto a basic synth voice. */
 type Voice = {
@@ -79,6 +76,15 @@ class AudioEngine {
     if (this.#ctx.state === 'suspended') await this.#ctx.resume();
   }
 
+  /**
+   * The audio clock, in seconds. It only advances while audio is running, so
+   * pausing (suspending the context) freezes it, and every loop resumes from
+   * exactly where it stopped.
+   */
+  get time(): number {
+    return this.#ctx?.currentTime ?? 0;
+  }
+
   get running(): boolean {
     return this.#ctx?.state === 'running';
   }
@@ -121,22 +127,20 @@ class AudioEngine {
   }
 
   /**
-   * Play one note from the backend.
+   * Play one note at `at`, a time on the audio clock (see `time`).
    *
-   * `inMs` is how far in the future the note should sound. Everything is
-   * scheduled against ctx.currentTime (the audio clock), which is far steadier
-   * than setTimeout, so notes land where they should even if the main thread
-   * is busy redrawing charts.
+   * Scheduling against the audio clock rather than calling this at the exact
+   * moment is what keeps the rhythm tight: the audio thread starts the note on
+   * time even if the main thread is busy redrawing charts.
    */
-  play(message: NoteMessage, instrument: string): void {
+  play(ticker: string, note: Note, instrument: string, at: number): void {
     const ctx = this.#ctx;
-    const out = this.#gainFor(message.ticker);
+    const out = this.#gainFor(ticker);
     if (!ctx || !out || ctx.state !== 'running') return;
 
     const voice = VOICES[instrument] ?? FALLBACK;
-    const at = ctx.currentTime + Math.max(0, message.inMs ?? 0) / 1000;
-    const seconds = Math.max(0.03, message.durationMs / 1000);
-    const peak = Math.max(0, Math.min(1, message.velocity));
+    const seconds = Math.max(0.03, note.durationMs / 1000);
+    const peak = Math.max(0, Math.min(1, note.velocity));
 
     // Shared shaping: a low-pass filter plus an envelope (fade in, hold, fade out).
     const filter = ctx.createBiquadFilter();
@@ -155,7 +159,7 @@ class AudioEngine {
 
     const stopAt = at + seconds + voice.release;
 
-    if (message.pitch === null || voice.noise) {
+    if (note.pitch === null || voice.noise) {
       // Unpitched: a burst of noise, plus a short tone for the body of a drum.
       const noise = ctx.createBufferSource();
       noise.buffer = this.#noiseBuffer(ctx);
@@ -163,10 +167,10 @@ class AudioEngine {
       noise.start(at);
       noise.stop(stopAt);
 
-      if (message.pitch !== null) {
+      if (note.pitch !== null) {
         const body = ctx.createOscillator();
         body.type = voice.wave;
-        body.frequency.value = midiToHz(message.pitch);
+        body.frequency.value = midiToHz(note.pitch);
         body.connect(filter);
         body.start(at);
         body.stop(stopAt);
@@ -174,7 +178,7 @@ class AudioEngine {
     } else {
       const osc = ctx.createOscillator();
       osc.type = voice.wave;
-      osc.frequency.value = midiToHz(message.pitch);
+      osc.frequency.value = midiToHz(note.pitch);
       osc.connect(filter);
       osc.start(at);
       osc.stop(stopAt);
@@ -182,7 +186,7 @@ class AudioEngine {
     }
   }
 
-  /** Called when transport pauses: silences anything still ringing. */
+  /** Called when transport pauses: silences anything ringing and freezes `time`. */
   async suspend(): Promise<void> {
     if (this.#ctx?.state === 'running') await this.#ctx.suspend();
   }

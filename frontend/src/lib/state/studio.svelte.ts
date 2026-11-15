@@ -1,195 +1,125 @@
 /**
- * The single source of truth for the app: the WebSocket connection, the mix,
- * and the chart data, in one reactive class.
+ * The single source of truth for the app: the mix, the chart data, the
+ * playheads, and the conversation with the backend.
  *
- * Why one class rather than several small stores: the three things are
- * inseparable. Adding a track sends a message, which produces history, which
- * produces notes, which move that track's playhead. Splitting them across
- * modules would mean importing each from the other.
+ * How a stock becomes sound:
+ *   1. addTrack()      puts it in the mix and asks the backend for two things:
+ *   2. getHistory()    the weekly prices, for the chart
+ *   3. getNotes()      every note in one loop, with the time to play each
+ *   4. scheduler.set() loops those notes on the audio clock
+ *   5. a frame loop    reads each track's position back for the chart playheads
  *
  * The `.svelte.ts` extension is what lets $state work outside a component.
  */
 
-import { audio } from "$lib/services/audio";
-import { DEFAULT_BPM, MAX_RECONNECT_MS, USE_MOCK, WS_URL } from "$lib/core/config";
-import { mockHistory } from "$lib/services/mock";
+import { DEFAULT_BPM } from "$lib/core/config";
 import { sectionById } from "$lib/core/sections";
-import type { ClientMessage, Point, SectionId, ServerMessage, StockInfo, Track } from "$lib/core/types";
+import type { Point, SectionId, StockInfo, Track } from "$lib/core/types";
+import { ApiError, checkHealth, getHistory, getNotes } from "$lib/services/api";
+import { audio } from "$lib/services/audio";
+import { scheduler } from "$lib/services/scheduler";
 
-export type ConnectionState = 'connecting' | 'open' | 'closed' | 'mock';
+export type BackendState = "checking" | "online" | "offline";
 
 class Studio {
   /* ---- Reactive state the components read ---- */
 
-  connection = $state<ConnectionState>(USE_MOCK ? 'mock' : 'connecting');
+  backend = $state<BackendState>("checking");
+  /** "alpaca" or "fake", as reported by the backend. Shown so a demo never runs on fake data by accident. */
+  priceSource = $state<string | null>(null);
   playing = $state(false);
   tracks = $state<Track[]>([]);
-  /** Last error from the backend, shown in the panel rather than swallowed. */
-  lastError = $state<string | null>(null);
 
   /**
-   * Chart data and playheads, keyed by ticker.
+   * Chart data, playheads and per-stock errors, keyed by ticker.
    *
-   * $state.raw, not $state: a full history can be thousands of points, and deep
-   * reactivity would proxy every one of them. Raw state is only reactive when
-   * REPLACED, which is why the handlers below build a new object instead of
-   * mutating ({ ...this.history, [ticker]: points }).
+   * $state.raw, not $state: a history is hundreds of points, and deep
+   * reactivity would proxy every one of them. Raw state only updates when
+   * REPLACED, which is why the code below builds new objects
+   * ({ ...this.history, [ticker]: points }) instead of mutating them.
    */
   history = $state.raw<Record<string, Point[]>>({});
   playheads = $state.raw<Record<string, number>>({});
+  trackErrors = $state.raw<Record<string, string>>({});
 
-  /* ---- Private connection plumbing ---- */
+  /* ---- Private ---- */
 
-  #socket: WebSocket | null = null;
-  #retries = 0;
-  #reconnectTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Batches playhead updates to one per animation frame; see #movePlayhead. */
-  #pendingHeads: Record<string, number> | null = null;
+  #frame = 0;
+  /**
+   * The newest notes request per ticker. If the key changes twice quickly, the
+   * first response can arrive AFTER the second; comparing ids lets the stale
+   * one be ignored instead of overwriting the newer notes.
+   */
+  #latestRequest = new Map<string, number>();
+  #requestCounter = 0;
 
-  /* ---------------- connection ---------------- */
+  /* ---------------- lifecycle ---------------- */
 
-  connect(): void {
-    if (USE_MOCK) return; // nothing to connect to in demo mode
+  /** Called once from App.svelte. Returns a cleanup function. */
+  init(): () => void {
+    void this.#checkBackend();
+    scheduler.start();
 
-    this.connection = 'connecting';
-    const socket = new WebSocket(WS_URL);
-    this.#socket = socket;
-
-    socket.onopen = () => {
-      this.connection = 'open';
-      this.#retries = 0;
-      // Re-register every track. A reconnect leaves the backend with no idea
-      // what this client had in its mix, so without this the music never restarts.
-      for (const track of this.tracks) this.#send(this.#addMessage(track));
+    const frame = () => {
+      this.#updatePlayheads();
+      this.#frame = requestAnimationFrame(frame);
     };
+    this.#frame = requestAnimationFrame(frame);
 
-    socket.onmessage = (event: MessageEvent<string>) => {
-      try {
-        this.#handle(JSON.parse(event.data) as ServerMessage);
-      } catch {
-        // A malformed frame should not kill the connection.
-        this.lastError = 'Received a message the frontend could not read.';
-      }
+    return () => {
+      cancelAnimationFrame(this.#frame);
+      scheduler.stop();
     };
-
-    socket.onclose = () => {
-      this.connection = 'closed';
-      // Exponential backoff: 1s, 2s, 4s... so a backend restart does not get
-      // hammered by a reconnect loop.
-      const wait = Math.min(MAX_RECONNECT_MS, 1000 * 2 ** this.#retries++);
-      this.#reconnectTimer = setTimeout(() => this.connect(), wait);
-    };
-
-    // onerror always precedes onclose, so reconnection is handled there.
-    socket.onerror = () => socket.close();
   }
 
-  disconnect(): void {
-    clearTimeout(this.#reconnectTimer);
-    const socket = this.#socket;
-    this.#socket = null;
-    if (socket) {
-      socket.onclose = null; // stop the reconnect we are about to trigger
-      socket.close();
+  async #checkBackend(): Promise<void> {
+    try {
+      const health = await checkHealth();
+      this.backend = "online";
+      this.priceSource = health.priceSource;
+    } catch {
+      this.backend = "offline";
     }
   }
 
   /**
-   * The addTrack message for a track. Built in one place because two code
-   * paths send it (adding a stock, and re-registering after a reconnect), and
-   * a field added to one but not the other would only break after a reconnect.
+   * Copies each track's position from the scheduler into reactive state,
+   * once per screen refresh, and only when a step actually changed.
    */
-  #addMessage(track: Track): ClientMessage {
-    return {
-      type: 'addTrack',
-      ticker: track.ticker,
-      section: track.section,
-      instrument: track.instrument,
-      key: track.key,
-      bpm: track.bpm,
-    };
-  }
-
-  #send(message: ClientMessage): void {
-    if (this.#socket?.readyState === WebSocket.OPEN) {
-      this.#socket.send(JSON.stringify(message));
-    }
-  }
-
-  /* ---------------- incoming messages ---------------- */
-
-  #handle(message: ServerMessage): void {
-    switch (message.type) {
-      case 'ready':
-      case 'transport':
-        this.playing = message.playing;
-        break;
-
-      case 'history':
-        this.history = { ...this.history, [message.ticker]: message.points };
-        break;
-
-      case 'note': {
-        const track = this.tracks.find((t) => t.ticker === message.ticker);
-        if (!track) return; // a note for something we just removed
-        audio.play(message, track.instrument);
-        this.#movePlayhead(message.ticker, message.step, message.inMs ?? 0);
-        break;
+  #updatePlayheads(): void {
+    if (!this.playing) return;
+    let changed = false;
+    const next = { ...this.playheads };
+    for (const track of this.tracks) {
+      const step = scheduler.step(track.ticker);
+      if (step !== null && next[track.ticker] !== step) {
+        next[track.ticker] = step;
+        changed = true;
       }
-
-      case 'error':
-        this.lastError = message.message;
-        break;
     }
-  }
-
-  /**
-   * Moves a chart playhead in time with its note.
-   *
-   * At 200bpm with ten stocks, notes arrive faster than the screen refreshes.
-   * Writing to reactive state on every one would queue dozens of redraws per
-   * frame, so updates are collected and flushed once per animation frame.
-   */
-  #movePlayhead(ticker: string, step: number, delayMs: number): void {
-    const apply = () => {
-      this.#pendingHeads ??= {};
-      this.#pendingHeads[ticker] = step;
-      if (Object.keys(this.#pendingHeads).length === 1) {
-        requestAnimationFrame(() => {
-          this.playheads = { ...this.playheads, ...this.#pendingHeads };
-          this.#pendingHeads = null;
-        });
-      }
-    };
-    // Notes are sent slightly early; the visual should wait too, or the
-    // playhead runs ahead of the sound.
-    if (delayMs > 0) setTimeout(apply, delayMs);
-    else apply();
+    if (changed) this.playheads = next;
   }
 
   /* ---------------- transport ---------------- */
 
   /**
    * Must be called from a real click: browsers block audio until the user
-   * interacts with the page, which is why this lives on the play button and
-   * not in an effect somewhere.
+   * interacts with the page, which is why this lives on the play button.
    */
   async play(): Promise<void> {
     await audio.start();
     for (const track of this.tracks) audio.setTrackVolume(track.ticker, track.volume);
     this.playing = true;
-    this.#send({ type: 'setTransport', playing: true });
   }
 
   async pause(): Promise<void> {
     await audio.suspend();
     this.playing = false;
-    this.#send({ type: 'setTransport', playing: false });
   }
 
   restart(): void {
+    scheduler.restart();
     this.playheads = {};
-    this.#send({ type: 'restart' });
   }
 
   /* ---------------- the mix ---------------- */
@@ -205,61 +135,102 @@ class Studio {
   addTrack(stock: StockInfo, section: SectionId): void {
     if (this.hasTrack(stock.ticker)) return;
 
-    const def = sectionById(section);
     const track: Track = {
       ticker: stock.ticker,
       name: stock.name,
       delisted: stock.delisted,
       section,
-      instrument: def.instruments[0],
-      key: 'amin',
+      instrument: sectionById(section).instruments[0],
+      key: "amin",
       volume: 75,
       bpm: DEFAULT_BPM,
     };
-
     this.tracks = [...this.tracks, track];
     audio.setTrackVolume(track.ticker, track.volume);
-    this.#send(this.#addMessage(track));
-
-    if (USE_MOCK) {
-      this.history = { ...this.history, [track.ticker]: mockHistory(track.ticker) };
-    }
+    void this.#load(track);
   }
 
   removeTrack(ticker: string): void {
     this.tracks = this.tracks.filter((t) => t.ticker !== ticker);
+    this.#latestRequest.delete(ticker);
+    scheduler.remove(ticker);
     audio.removeTrack(ticker);
-    this.#send({ type: 'removeTrack', ticker });
 
     // Drop the chart data too, or long sessions leak memory.
-    const { [ticker]: _history, ...restHistory } = this.history;
-    const { [ticker]: _head, ...restHeads } = this.playheads;
-    this.history = restHistory;
-    this.playheads = restHeads;
+    const { [ticker]: _history, ...history } = this.history;
+    const { [ticker]: _head, ...playheads } = this.playheads;
+    const { [ticker]: _error, ...trackErrors } = this.trackErrors;
+    this.history = history;
+    this.playheads = playheads;
+    this.trackErrors = trackErrors;
   }
 
   /**
-   * Patches one track. Volume is client-side only; instrument, key and bpm
-   * are also sent to the backend, which uses them to pick and time notes.
+   * Patches one track.
+   *  - volume:     audio only, nothing to fetch
+   *  - instrument: changes the sound but not the timing, so no refetch
+   *  - key, bpm:   change which notes play and when, so new notes are fetched
    *
-   * `sync: false` updates the screen without telling the backend. A slider
-   * fires an input event for every pixel it moves, so the BPM slider uses
-   * this while dragging and only syncs once on release, rather than sending
-   * the backend dozens of tempo changes per second.
+   * `sync: false` updates the screen without fetching. The BPM slider fires
+   * an event for every pixel it moves, so it uses this while dragging and
+   * only fetches once, on release.
    */
   updateTrack(
     ticker: string,
-    patch: Partial<Pick<Track, 'instrument' | 'key' | 'volume' | 'bpm'>>,
+    patch: Partial<Pick<Track, "instrument" | "key" | "volume" | "bpm">>,
     { sync = true }: { sync?: boolean } = {},
   ): void {
     this.tracks = this.tracks.map((t) => (t.ticker === ticker ? { ...t, ...patch } : t));
+    const track = this.tracks.find((t) => t.ticker === ticker);
+    if (!track) return;
 
     if (patch.volume !== undefined) audio.setTrackVolume(ticker, patch.volume);
-
-    const { instrument, key, bpm } = patch;
-    if (sync && (instrument !== undefined || key !== undefined || bpm !== undefined)) {
-      this.#send({ type: 'updateTrack', ticker, instrument, key, bpm });
+    if (patch.instrument !== undefined) scheduler.setInstrument(ticker, patch.instrument);
+    if (sync && (patch.key !== undefined || patch.bpm !== undefined)) {
+      void this.#loadNotes(track).catch((error) => this.#trackFailed(ticker, error));
     }
+  }
+
+  /* ---------------- talking to the backend ---------------- */
+
+  /** Fetches the chart and the notes together; the backend caches both from one price fetch. */
+  async #load(track: Track): Promise<void> {
+    try {
+      const [history] = await Promise.all([getHistory(track.ticker), this.#loadNotes(track)]);
+      if (!this.hasTrack(track.ticker)) return; // removed while loading
+      this.history = { ...this.history, [track.ticker]: history.points };
+    } catch (error) {
+      this.#trackFailed(track.ticker, error);
+    }
+  }
+
+  async #loadNotes(track: Track): Promise<void> {
+    const id = ++this.#requestCounter;
+    this.#latestRequest.set(track.ticker, id);
+
+    const schedule = await getNotes(track.ticker, track.section, track.key, track.bpm);
+    this.backend = "online";
+
+    // Ignore the answer if the track was removed, or a newer request was made.
+    if (this.#latestRequest.get(track.ticker) !== id) return;
+
+    // Read the instrument now, not from `track`: it may have changed while
+    // the request was in flight.
+    const current = this.tracks.find((t) => t.ticker === track.ticker);
+    if (!current) return;
+    scheduler.set(track.ticker, schedule, current.instrument);
+
+    if (this.trackErrors[track.ticker]) {
+      const { [track.ticker]: _cleared, ...rest } = this.trackErrors;
+      this.trackErrors = rest;
+    }
+  }
+
+  #trackFailed(ticker: string, error: unknown): void {
+    if (!this.hasTrack(ticker)) return;
+    const message = error instanceof Error ? error.message : "Something went wrong.";
+    if (error instanceof ApiError && error.status === 0) this.backend = "offline";
+    this.trackErrors = { ...this.trackErrors, [ticker]: message };
   }
 }
 

@@ -4,15 +4,14 @@
     import Main from "./lib/Main.svelte";
     import { studio } from "$lib/state/studio.svelte";
 
-    // The one place the WebSocket is opened. Doing it here rather than inside
-    // Main means the connection survives anything Main re-renders, and there
-    // is a single obvious place to look for it.
-    onMount(() => {
-        studio.connect();
-        // Returning a cleanup function closes the socket when the app unmounts.
-        // Without it, Vite's hot reload would leave sockets open on every save.
-        return () => studio.disconnect();
-    });
+    // Starts the note scheduler and the playhead loop, and checks the backend
+    // is reachable. Done here, once, rather than inside Main, so nothing a
+    // component re-renders can start a second copy.
+    //
+    // init() returns a cleanup function, and onMount runs it when the app
+    // unmounts. Without that, Vite's hot reload would leave an extra timer
+    // running on every save.
+    onMount(() => studio.init());
 </script>
 
 <Header />

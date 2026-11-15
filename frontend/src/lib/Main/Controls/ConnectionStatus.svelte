@@ -2,25 +2,31 @@
     import { studio } from "$lib/state/studio.svelte";
 
     // A lookup rather than an if-chain: one line per state, and TypeScript
-    // checks that every ConnectionState has a label.
+    // checks that every BackendState has a label.
     const LABELS = {
-        open: "Connected",
-        connecting: "Connecting…",
-        closed: "Reconnecting…",
-        mock: "Demo data",
+        checking: "Connecting…",
+        online: "Backend connected",
+        offline: "Backend offline",
     } as const;
 
-    const label = $derived(LABELS[studio.connection]);
+    const label = $derived(LABELS[studio.backend]);
+
+    // Generated prices are useful for building without internet, but a demo
+    // should never run on them by accident, so they get a visible warning.
+    const fakeData = $derived(studio.backend === "online" && studio.priceSource === "fake");
 </script>
 
 <footer>
-    <span class="dot" class:is-live={studio.connection === "open"}></span>
+    <span class="dot" class:is-live={studio.backend === "online"} class:is-down={studio.backend === "offline"}></span>
     <span>{label}</span>
 </footer>
 
-{#if studio.lastError}
-    <!-- Errors from the backend are shown, not swallowed into the console. -->
-    <p class="error">{studio.lastError}</p>
+{#if fakeData}
+    <p class="warning">Using generated prices (PRICE_SOURCE=fake), not real market data.</p>
+{/if}
+
+{#if studio.backend === "offline"}
+    <p class="warning">Start it from backend/ with: uv run uvicorn app.main:app --reload</p>
 {/if}
 
 <style>
@@ -45,7 +51,11 @@
         background: var(--accent);
     }
 
-    .error {
+    .is-down {
+        background: var(--danger);
+    }
+
+    .warning {
         font-size: 0.75rem;
         color: var(--danger);
     }

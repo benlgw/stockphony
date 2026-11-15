@@ -52,7 +52,7 @@
         <input
             id="stock-search"
             type="search"
-            placeholder="Try “nvda” or “lmn bro”"
+            placeholder="Search by company or ticker"
             autocomplete="off"
             bind:value={query}
         />
