@@ -1,0 +1,72 @@
+# Stockphony backend
+
+A FastAPI REST API. It searches stocks, fetches price history from Alpaca,
+caches it in Postgres, and works out when each stock's notes should play.
+
+## Running it
+
+From `backend/`, with Docker running:
+
+```bash
+docker compose up -d                             # Postgres
+uv run uvicorn app.main:app --reload --port 8000 # the API
+```
+
+Then open **http://localhost:8000/docs**: every endpoint, with a "Try it out"
+button. The frontend reaches the API through Vite's `/api` proxy, so start
+the frontend with `pnpm dev` as usual.
+
+pip users: activate your virtual environment, `pip install -r requirements.txt`,
+then run the same `uvicorn` command without `uv run`.
+
+## Settings (backend/.env)
+
+```
+ALPACA_API_KEY=...
+ALPACA_SECRET_KEY=...
+DATABASE_URL=postgresql://composer:composer@localhost:5432/stocks
+SEC_USER_AGENT="Stockphony your.name@example.com"   # only for scripts/load_stocks.py
+
+# Optional
+PRICE_SOURCE=fake          # generated prices: no keys, no internet needed
+CACHE_MAX_AGE_HOURS=24     # how long fetched prices count as fresh
+PRELOAD_TOP_N=3            # search results to preload in the background
+```
+
+## How it fits together
+
+```
+app/
+├── main.py      the endpoints
+├── prices.py    Alpaca + the Postgres cache (the only file that talks to Alpaca)
+├── music.py     prices -> timed notes; pure functions, easy to experiment with
+├── db.py        stock search and the cache tables
+├── models.py    the JSON shapes every endpoint returns
+├── settings.py  everything read from .env
+└── preload.py   fill the cache from the command line
+```
+
+**Caching.** Every price fetch is stored in Postgres (`price_history`), so a
+stock is only fetched from Alpaca once a day. If a refresh fails, the cached
+copy is served instead. Stocks Alpaca has no data for (anything delisted
+before 2016, when its history starts) are remembered, and hidden from search.
+
+**Preloading.** Searching preloads the top 3 results in the background, and
+the frontend asks for a preload as soon as a stock is picked up to drag. By
+the time it's dropped, its prices are usually cached.
+
+## Before the demo
+
+Fill the cache with every stock you plan to show, so they play even if the
+venue's wifi doesn't:
+
+```bash
+uv run python -m app.preload NVDA AAPL GME TSLA
+```
+
+## Database
+
+```bash
+uv run python scripts/load_stocks.py    # load every US-listed stock (once)
+docker compose exec db psql -U composer -d stocks
+```

@@ -20,6 +20,11 @@ dependencies = [
     "psycopg[binary]>=3.2",
     # Reads backend/.env into environment variables.
     "python-dotenv>=1.0",
+    # The REST API, and the server that runs it.
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    # Alpaca's official SDK, for historical stock prices.
+    "alpaca-py>=0.40",
 ]
 
 [tool.uv]
