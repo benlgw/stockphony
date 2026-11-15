@@ -55,14 +55,35 @@ before 2016, when its history starts) are remembered, and hidden from search.
 the frontend asks for a preload as soon as a stock is picked up to drag. By
 the time it's dropped, its prices are usually cached.
 
-## Before the demo
+## Before a demo: saving stocks for offline use
 
-Fill the cache with every stock you plan to show, so they play even if the
-venue's wifi doesn't:
+The backend saves each stock's prices in the database the first time it's
+used. To be sure the stocks you want to show are saved *before* you lose
+internet, list their tickers after this command:
+
+```bash
+uv run python -m app.preload TICKER TICKER ...
+```
+
+For example, to save Nvidia, Apple, GameStop and Tesla:
 
 ```bash
 uv run python -m app.preload NVDA AAPL GME TSLA
 ```
+
+(pip users: activate your virtual environment and leave out `uv run`.)
+
+- **Use the tickers the app's search shows**, e.g. `BRK-B` for Berkshire
+  Hathaway. Upper or lower case both work.
+- **Each stock prints one line** saying how many days of prices were saved,
+  something like `NVDA  2,733 days, 2016-01-04 to 2026-11-13`. If one says
+  `failed`, check your Alpaca keys and internet connection, then run it again.
+- **Saved prices work offline for good.** Once they're over a day old, the
+  backend tries to refresh them; with no internet, it just keeps using the
+  saved copy.
+- **Only saved stocks can play offline.** Search still works without internet
+  (the company list lives in the database), but a stock that was never saved
+  needs a connection the first time it's added.
 
 ## Database
 
