@@ -17,17 +17,6 @@
     const points = $derived(studio.history[track.ticker] ?? []);
     const playhead = $derived(studio.playheads[track.ticker] ?? 0);
 
-    /** The date under the playhead, shown above the chart. */
-    const currentDate = $derived.by(() => {
-        const point = points[Math.min(playhead, points.length - 1)];
-        if (!point) return "Loading history…";
-        return new Date(point.date).toLocaleDateString("en-GB", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-        });
-    });
-
     // $derived, not plain consts: Svelte reuses this component when the list
     // changes, and a const would keep the ticker it was first created with.
     const instrumentId = $derived(`instrument-${track.ticker}`);
@@ -87,8 +76,10 @@
     </div>
 
     <div class="playback">
-        <div class="playback-head">
-            <span class="date">{currentDate}</span>
+        <!-- The chart shares a row with the remove button, so it can use the
+             card's full height instead of sitting under a header row. -->
+        <div class="chart-row">
+            <PriceChart {points} {playhead} />
             <button
                 class="remove"
                 onclick={() => studio.removeTrack(track.ticker)}
@@ -99,8 +90,6 @@
                 </svg>
             </button>
         </div>
-
-        <PriceChart {points} {playhead} />
 
         <!--
           Both sliders share one grid, so their tracks line up even though
@@ -239,20 +228,18 @@
         gap: 0.625rem;
     }
 
-    .playback-head {
+    /* Grows to fill whatever height the sliders leave. align-items: stretch
+       (the default) makes the chart as tall as the row; the button opts out
+       with align-self so it stays a 44px square in the top corner. */
+    .chart-row {
+        flex: 1 1 auto;
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
-    }
-
-    .date {
-        font-family: var(--font-mono);
-        font-size: 0.8125rem;
-        color: var(--muted);
+        gap: 0.75rem;
+        min-height: 0;
     }
 
     .remove {
+        align-self: flex-start;
         width: 44px;
         height: 44px;
         flex-shrink: 0;
