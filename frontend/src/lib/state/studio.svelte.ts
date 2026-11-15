@@ -148,6 +148,8 @@ class Studio {
     };
     this.tracks = [...this.tracks, track];
     audio.setTrackVolume(track.ticker, track.volume);
+    // Build its instrument now, not on its first note mid-playback.
+    audio.prepare(track.ticker, track.instrument);
     void this.#load(track);
   }
 
@@ -186,7 +188,10 @@ class Studio {
     if (!track) return;
 
     if (patch.volume !== undefined) audio.setTrackVolume(ticker, patch.volume);
-    if (patch.instrument !== undefined) scheduler.setInstrument(ticker, patch.instrument);
+    if (patch.instrument !== undefined) {
+      scheduler.setInstrument(ticker, patch.instrument);
+      audio.prepare(ticker, patch.instrument);
+    }
     if (sync && (patch.key !== undefined || patch.bpm !== undefined || patch.leverage !== undefined)) {
       void this.#loadNotes(track).catch((error) => this.#trackFailed(ticker, error));
     }

@@ -20,6 +20,36 @@
 import * as Tone from "tone";
 import type { Note } from "$lib/core/types";
 
+/**
+ * The audio context, created on first use with a "playback" buffer size.
+ *
+ * Browsers default to their smallest audio buffer ("interactive", about 10ms),
+ * made for live instruments that must respond instantly. With a tiny buffer,
+ * any brief spike in work makes the audio thread miss its deadline, which you
+ * hear as stutters and dropouts. Stockphony queues every note 150ms ahead, so
+ * it doesn't need instant response, and a "playback" buffer (what music
+ * players use) gives the audio thread far more slack.
+ *
+ * Created on first use rather than when this file loads: browsers object to
+ * an audio context created before the user has clicked or dragged anything.
+ */
+let contextReady = false;
+function ensureContext(): void {
+  if (contextReady) return;
+  // Tone creates its own default context (with the small buffer) as soon as
+  // it loads. Swap in ours, and pause Tone's so it isn't left processing
+  // silence alongside it. (Pausing rather than closing: Tone's own clean-up
+  // still touches a closed context, and warns about it.)
+  const tonesDefault = Tone.getContext().rawContext as AudioContext;
+  // lookAhead: how far ahead Tone accepts a note directly. Its default (0.1s)
+  // is shorter than our scheduler's 0.15s, so Tone's chord instruments held
+  // back the furthest notes on a timer of their own, and when you paused,
+  // those fired into the paused context with a console warning each.
+  Tone.setContext(new Tone.Context({ latencyHint: "playback", lookAhead: 0.2 }));
+  if (tonesDefault.state === "running") void tonesDefault.suspend();
+  contextReady = true;
+}
+
 /** MIDI note number to frequency: 69 is A4 = 440Hz, 12 semitones per octave. */
 const midiToHz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
 
@@ -347,12 +377,7 @@ class AudioEngine {
   #enabled = false;
   #master: Tone.Gain | null = null;
   #tracks = new Map<string, TrackAudio>();
-  /**
-   * Volume per ticker, remembered here rather than set on a node straight
-   * away. Stocks are usually added before play is pressed, and creating Tone
-   * nodes before then makes Tone warn about the suspended audio context. So
-   * nothing is built until play; this map holds the volumes until then.
-   */
+  /** Volume per ticker, so a track's volume survives its nodes being rebuilt. */
   #volumes = new Map<string, number>();
 
   /**
@@ -361,6 +386,7 @@ class AudioEngine {
    * audio context is still suspended, they just stay silent.
    */
   #masterBus(): Tone.Gain {
+    ensureContext();
     if (!this.#master) {
       this.#master = new Tone.Gain(MASTER_GAIN);
 
@@ -385,6 +411,10 @@ class AudioEngine {
   }
 
   #track(ticker: string): TrackAudio {
+    // Before creating anything: a node made on Tone's default context can't
+    // be connected to nodes on ours, and the very first track's gain would
+    // otherwise be created a moment before the switch.
+    ensureContext();
     let track = this.#tracks.get(ticker);
     if (!track) {
       const gain = new Tone.Gain(gainFor(this.#volumes.get(ticker) ?? 75)).connect(this.#masterBus());
@@ -394,8 +424,22 @@ class AudioEngine {
     return track;
   }
 
+  /**
+   * Builds a track's instrument ahead of time: when a stock is added, or its
+   * instrument changes. Building one takes up to ~40ms of main-thread work
+   * (plus the shared reverb the first time). Done lazily on the first note
+   * instead, that work landed mid-playback and froze the page long enough
+   * for notes to be skipped. Recordings also start loading straight away.
+   *
+   * Safe while paused: building instruments doesn't start the audio.
+   */
+  prepare(ticker: string, instrument: string): void {
+    this.#voiceFor(this.#track(ticker), instrument);
+  }
+
   /** Browsers block audio until the user interacts, so this runs from the play button. */
   async start(): Promise<void> {
+    ensureContext();
     this.#enabled = true;
     // iPhones mute web audio while the silent switch is on, because Safari
     // treats it like a notification sound by default. Telling Safari this is
@@ -412,6 +456,7 @@ class AudioEngine {
    * pausing freezes it and every loop resumes from exactly where it stopped.
    */
   get time(): number {
+    ensureContext();
     const context = Tone.getContext();
     // If the browser started the context by itself before play was pressed,
     // stop it, so the clock (and every loop's position) stays frozen at 0.
@@ -422,7 +467,11 @@ class AudioEngine {
   }
 
   get running(): boolean {
-    return this.#enabled && Tone.getContext().state === "running";
+    // Checked every 25ms from page load, so it mustn't create the context
+    // before play has ever been pressed (see ensureContext).
+    if (!this.#enabled) return false;
+    ensureContext();
+    return Tone.getContext().state === "running";
   }
 
   /** Volume slider, 0-100. */
@@ -477,6 +526,7 @@ class AudioEngine {
   /** Called when transport pauses: silences everything and freezes `time`. */
   async suspend(): Promise<void> {
     this.#enabled = false;
+    ensureContext();
     const raw = Tone.getContext().rawContext as AudioContext;
     if (raw.state === "running") await raw.suspend();
   }
